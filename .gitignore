@@ -1,0 +1,52 @@
+# ---- Private / local-only ------------------------------------------------------------------------
+# Private material lives in dev/ (tracked here, left out of the public snapshot by .gitattributes).
+# Claude Code local settings / memory (the pointer to dev/CLAUDE.md is tracked)
+.claude/*
+!.claude/CLAUDE.md
+
+# Secrets and credentials (never commit)
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa*
+id_ed25519*
+*.token
+# Test SSH key pairs and authorized_keys for the dev test hosts
+dev/remote-host/keys/
+dev/ssh-test/authorized_keys
+
+# Exported extension images / release artifacts
+dist/
+*.tar
+*.tar.gz
+
+# ---- Build output & dependencies -----------------------------------------------------------------
+node_modules/
+ui/build/
+*.tsbuildinfo
+
+# ---- Python -------------------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+build/
+
+# ---- Editors / OS ---------------------------------------------------------------------------------
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---- Logs ---------------------------------------------------------------------------------------
+*.log
+npm-debug.log*

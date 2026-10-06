@@ -1,0 +1,11 @@
+Pierside
+Copyright 2026 The Pierside Authors
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+Pierside is not affiliated with, endorsed by, or sponsored by Docker, Inc. or SUSE
+(Rancher). "Docker" and "Docker Desktop" are trademarks of Docker, Inc.; "Rancher"
+and "Rancher Desktop" are trademarks of SUSE. They are used here only to describe
+compatibility.
+
+Third-party components and their licenses are listed in THIRD_PARTY_NOTICES.md.

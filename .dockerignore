@@ -1,0 +1,9 @@
+**/node_modules
+ui/build
+**/__pycache__
+**/.venv
+docs
+dev
+.github
+.claude
+.git

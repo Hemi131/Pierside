@@ -1,0 +1,22 @@
+services:
+  pierside:
+    image: ${DESKTOP_PLUGIN_IMAGE}
+    restart: unless-stopped
+    labels:
+      # Lets the extension UI find this container to read the session token (docker exec, local only).
+      com.pierside.backend: "true"
+    # Lets the backend signal orphaned exec processes (their Pid is a VM-namespace PID).
+    # No real privilege gain: the backend already has the docker socket.
+    pid: host
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Remote engine registry + SSH keys (survives reinstalls of the same extension).
+      - pierside-data:/data
+    ports:
+      # WebSocket endpoint for the UI (vm.service is request/response only). No fixed host port:
+      # Docker picks a free one and the backend reports it via /ws-info, so a second Pierside install
+      # (e.g. a local build next to the published image) can't collide with this one.
+      - "127.0.0.1::8080"
+
+volumes:
+  pierside-data:

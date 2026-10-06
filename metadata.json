@@ -1,0 +1,16 @@
+{
+  "icon": "icon.svg",
+  "vm": {
+    "composefile": "compose/docker-compose.yaml",
+    "exposes": {
+      "socket": "pierside.sock"
+    }
+  },
+  "ui": {
+    "dashboard-tab": {
+      "title": "Pierside",
+      "root": "/ui",
+      "src": "index.html"
+    }
+  }
+}
