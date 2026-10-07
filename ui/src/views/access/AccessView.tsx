@@ -250,7 +250,7 @@ function CopyBlock({ text, label }: { text: string; label: string }) {
  */
 function ConnectDialog({ shown, container, onClose }: { shown: { profile: Profile; token: string | null } | null; container: string; onClose: () => void }) {
   const [tab, setTab] = useState(0);
-  // Whether the Claude Code command registers the server for all the user's projects or only one.
+  // Whether the Claude Code / Devin CLI command registers the server for all the user's projects or only one.
   const [everywhere, setEverywhere] = usePersistentState("access.allProjects", true);
   if (!shown) return null;
   const name = `pierside-${slug(shown.profile.name)}`;
@@ -259,6 +259,8 @@ function ConnectDialog({ shown, container, onClose }: { shown: { profile: Profil
     ? ["exec", "-i", "-e", `PIERSIDE_MCP_TOKEN=${shown.token}`, backend, "python", "-m", "app.mcp_stdio"]
     : ["exec", "-i", backend, "python", "-m", "app.mcp_stdio", "--profile", shown.profile.id];
   const claude = `claude mcp add ${everywhere ? "--scope user " : ""}${name} -- docker ${args.join(" ")}`;
+  const devin = `devin mcp add ${everywhere ? "-s user " : ""}${name} -- docker ${args.join(" ")}`;
+  const cli = tab === 0 ? { app: "Claude Code", command: claude } : { app: "Devin CLI", command: devin };
   const json = JSON.stringify({ mcpServers: { [name]: { command: "docker", args } } }, null, 2);
   return (
     <Dialog open onClose={onClose} maxWidth="md" fullWidth>
@@ -275,23 +277,32 @@ function ConnectDialog({ shown, container, onClose }: { shown: { profile: Profil
         )}
         <Tabs value={tab} onChange={(_e, v: number) => setTab(v)} sx={{ mb: 2, minHeight: 36 }}>
           <Tab label="Claude Code" sx={{ minHeight: 36 }} />
+          <Tab label="Devin CLI" sx={{ minHeight: 36 }} />
           <Tab label="Other MCP clients" sx={{ minHeight: 36 }} />
         </Tabs>
-        {tab === 0 ? (
+        {tab < 2 ? (
           <>
             <Typography sx={{ mb: 1 }}>
               {everywhere
-                ? "Run this in a terminal on this computer. Claude Code then has the access in all your projects:"
-                : "Run this in a terminal on this computer, inside the project folder where Claude Code should have the access:"}
+                ? `Run this in a terminal on this computer. ${cli.app} then has the access in all your projects:`
+                : `Run this in a terminal on this computer, inside the project folder where ${cli.app} should have the access:`}
             </Typography>
-            <CopyBlock text={claude} label="Command" />
+            <CopyBlock text={cli.command} label="Command" />
             <FormControlLabel
               sx={{ mt: 1 }}
               control={<Switch size="small" checked={everywhere} onChange={(e) => setEverywhere(e.target.checked)} />}
               label="Available in all my projects"
             />
             <Typography variant="body2" color="text.secondary">
-              Then start Claude Code and check <code>/mcp</code>.
+              {tab === 0 ? (
+                <>
+                  Then start Claude Code and check <code>/mcp</code>.
+                </>
+              ) : (
+                <>
+                  Then check with <code>devin mcp list</code>.
+                </>
+              )}
             </Typography>
           </>
         ) : (

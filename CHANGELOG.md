@@ -4,6 +4,10 @@ Each release of Pierside, newest first. Install a specific one with `rdctl exten
 
 ## Unreleased
 
+## 0.4.1 - 2026-10-07
+
+- AI access: the connection dialog also shows the command for Devin CLI (`devin mcp add`).
+
 ## 0.4.0 - 2026-10-07
 
 - **AI access:** a built-in MCP server for assistants such as Claude Code, with 66 tools covering containers, files, Compose projects, images, volumes, networks, ports, engine information, clean-up and Swarm, on the local engine and on SSH engines. Each connection has its own limits: which engines and containers, which of 20 permissions, and which file paths; or "Allow everything". By default no secret is stored with the assistant: you allow each session in Pierside, or trust a connection for a period or for good, actions that change something can ask every time, and the assistant can ask you for more access when it needs it; an access token is available for unattended use. Calls are listed under Recent activity. See [docs/ai-access.md](docs/ai-access.md).

@@ -19,7 +19,17 @@ For Claude Code the command looks like this:
 claude mcp add --scope user pierside-webshop -- docker exec -i <pierside container> python -m app.mcp_stdio --profile 1a2b3c4d5e6f
 ```
 
-With `--scope user` Claude Code has the access in all your projects. Switch off **Available in all my projects** in the dialog to get a command without it; that one registers the access only for the project folder you run it in. In Claude Code, `/mcp` shows whether it is connected. The dialog's second tab has the same thing as JSON for other MCP clients.
+With `--scope user` Claude Code has the access in all your projects. Switch off **Available in all my projects** in the dialog to get a command without it; that one registers the access only for the project folder you run it in. In Claude Code, `/mcp` shows whether it is connected.
+
+The dialog's **Devin CLI** tab has the same command for Devin's command-line tool:
+
+```sh
+devin mcp add -s user pierside-webshop -- docker exec -i <pierside container> python -m app.mcp_stdio --profile 1a2b3c4d5e6f
+```
+
+`-s user` plays the role of `--scope user`; without it Devin registers the access only for the project folder you run it in. `devin mcp list` shows the servers it knows.
+
+The last tab has the same thing as JSON for other MCP clients.
 
 ## How the assistant gets in
 
