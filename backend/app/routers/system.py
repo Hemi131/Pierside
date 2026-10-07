@@ -60,7 +60,11 @@ async def set_update_check(body: UpdateCheck):
 @router.get("/df")
 async def disk_usage():
     """Slow on big engines (walks container layers and volumes); the UI shows a spinner."""
-    df = await query_json("system/df")
+    return summarise_df(await query_json("system/df"))
+
+
+def summarise_df(df: dict) -> dict:
+    """`GET /system/df` -> per category: count, active, size, reclaimable (as `docker system df`) and the largest items."""
     images = df.get("Images") or []
     containers = df.get("Containers") or []
     volumes = df.get("Volumes") or []

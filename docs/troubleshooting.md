@@ -12,6 +12,17 @@ Live updates use a WebSocket to Pierside's backend on a localhost port. If that 
 
 Rancher Desktop reuses the image already on your machine. Follow [Update](install-and-update.md#update): `docker pull`, uninstall, install.
 
+## `invalid extension metadata` / `422 Unprocessable Entity` when installing
+
+Rancher Desktop could not download the image, usually because of a network or DNS problem, and reports it this way. Download it yourself to see the real error, then install:
+
+```sh
+docker pull ghcr.io/hemi131/pierside:latest
+rdctl extension install ghcr.io/hemi131/pierside:latest
+```
+
+If `docker pull` fails with a timeout, try again in a moment or check your network, VPN or DNS.
+
 ## A container has no shell
 
 Minimal images have no `sh`. The Exec tab offers a **debug shell**: a helper container that shares the container's processes and network and starts in its filesystem. It is removed when you close the session.

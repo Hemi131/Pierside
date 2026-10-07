@@ -7,6 +7,7 @@ from pydantic import BaseModel, field_validator
 
 from app.services import containers as containers_svc
 from app.services import docker_client
+from app.services.mcp_access import clients as mcp_clients, profiles as mcp_profiles
 from app.services.engines import LOCAL_ID, EngineConfig, EngineError, engines, probe
 from app.services.helper import remove_all_helpers
 from app.services.hub import hub
@@ -122,6 +123,8 @@ async def remove_engine(engine_id: str):
         raise _err(e)
     composereg.forget_engine(engine_id)  # its remembered compose projects go with it
     await forwards.remove_for_engine(engine_id)  # and its port forwards
+    mcp_profiles.forget_engine(engine_id)  # and the AI access connections set up for it
+    await mcp_clients.drop(engine_id)
     return {"ok": True}
 
 

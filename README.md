@@ -48,6 +48,7 @@ The `docker pull` matters: Rancher Desktop installs from the image already on yo
 - **Remote engines:** manage Docker on other machines over SSH; give each a colour so production is hard to miss.
 - **Swarm:** stacks, services, tasks, nodes, secrets and configs.
 - **Terminal:** a Docker console for the local engine, a full shell on SSH engines.
+- **AI access:** a built-in MCP server lets an assistant such as Claude Code work with your engines within limits you set, from reading one project's logs up to nearly everything this window can do, with your approval in Pierside instead of a stored secret.
 
 ## Documentation
 
@@ -56,13 +57,14 @@ The `docker pull` matters: Rancher Desktop installs from the image already on yo
 - [Compose projects](docs/compose.md)
 - [Ports and forwarding](docs/ports.md)
 - [Files, volumes and the editor](docs/files-and-volumes.md)
+- [AI access (MCP server)](docs/ai-access.md)
 - [Troubleshooting](docs/troubleshooting.md)
 - [Building from source](docs/building.md)
 - [Changelog](CHANGELOG.md)
 
 ## Privacy
 
-Pierside runs entirely on your machine. The only request it makes on its own is a once-a-day check of this repository's newest release number on GitHub, which sends nothing about your installation and can be switched off (click the version in the footer).
+Pierside runs entirely on your machine. An AI assistant only sees what you share with it under [AI access](docs/ai-access.md), which is off until you create a connection. The only request Pierside makes on its own is a once-a-day check of this repository's newest release number on GitHub, which sends nothing about your installation and can be switched off (click the version in the footer).
 
 ## About this repository
 

@@ -15,7 +15,9 @@ Rules (both doors unless noted):
     one-time ticket instead), GET /app/* (the public UI files of the standalone window), and CORS
     preflights;
   * tcp only: the Vite dev server origin needs no token (the dev UI has no way to get it). On the
-    socket door that exemption would be forgeable from the network, so it doesn't exist there.
+    socket door that exemption would be forgeable from the network, so it doesn't exist there;
+  * tcp only: /mcp (the MCP server for AI assistants) takes an access profile's own token instead,
+    checked by the route (routers/mcp.py). It is not offered on the socket door at all.
 
 How the UI gets the token: the backend writes it to TOKEN_FILE (root-only, inside its container);
 the extension UI reads it with Rancher's *local* docker CLI (`docker exec <backend> cat ...`), a
@@ -68,6 +70,7 @@ class Guard:
         allowed = _origin_ok(origin) and (
             secrets.compare_digest(token, WS_TOKEN)
             or (self.door == "tcp" and origin in DEV_ORIGINS)
+            or (self.door == "tcp" and http and path == "/mcp" and not origin)  # non-browser clients only
             or (http and path == "/diag" and method == "POST")
             or (http and path == "/standalone/redeem" and method == "POST")
             or (http and method == "GET" and (path == "/app" or path.startswith("/app/")))

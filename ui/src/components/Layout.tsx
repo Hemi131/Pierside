@@ -21,11 +21,13 @@ import { EngineAlerts } from "./EngineAlerts";
 import { ComposeDialogHost } from "./compose/ComposeDialog";
 import { TerminalPanel } from "./terminal/TerminalPanel";
 import { ForwardDialogHost } from "./ForwardDialog";
+import { AccessPrompt } from "../views/access/AccessPrompt";
 import { VersionFooter } from "./AboutDialog";
 import SettingsEthernetIcon from "@mui/icons-material/SettingsEthernet";
 import TerminalIcon from "@mui/icons-material/Terminal";
 import LanOutlinedIcon from "@mui/icons-material/LanOutlined";
 import PieChartOutlineIcon from "@mui/icons-material/PieChartOutline";
+import SmartToyOutlinedIcon from "@mui/icons-material/SmartToyOutlined";
 
 const SECTIONS = [
   { key: "containers", label: "Containers", icon: <ViewInArOutlinedIcon fontSize="small" /> },
@@ -189,6 +191,7 @@ function Sidebar({ route }: { route: string[] }) {
       </List>
       <Box sx={{ flex: 1 }} />
       <List dense disablePadding sx={{ pb: 1 }}>
+        {item("access", "AI access", <SmartToyOutlinedIcon fontSize="small" />, () => navigate("access"), active === "access")}
         {inExtension && item("window", "Open in separate window", <OpenInNewIcon fontSize="small" />, () => void openSeparateWindow())}
         {item(
           "collapse",
@@ -255,6 +258,7 @@ export function Layout({ route, children }: { route: string[]; children: ReactNo
       <EngineAlerts />
       <ComposeDialogHost />
       <ForwardDialogHost />
+      <AccessPrompt />
       <Box sx={{ display: "flex", flexDirection: "column", height: "100%", bgcolor: "background.default" }}>
         <Box sx={{ display: "flex", flex: 1, minHeight: 0 }}>
           <Sidebar route={route} />

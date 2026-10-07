@@ -12,6 +12,7 @@ import { ImageDetail } from "./views/images/ImageDetail";
 import { SwarmView } from "./views/swarm/SwarmView";
 import { ServiceDetail, StackDetail } from "./views/swarm/SwarmDetails";
 import { EnginesView } from "./views/engines/EnginesView";
+import { AccessView } from "./views/access/AccessView";
 import { NetworksView } from "./views/networks/NetworksView";
 import { NetworkDetail } from "./views/networks/NetworkDetail";
 import { DiskUsageView } from "./views/disk/DiskUsageView";
@@ -44,6 +45,8 @@ function Routes({ route }: { route: string[] }) {
       return <PortsView />;
     case "engines":
       return <EnginesView />;
+    case "access":
+      return <AccessView />;
     default:
       return <Placeholder title="Not found" note={route.join("/")} />;
   }
@@ -56,6 +59,6 @@ export default function App() {
       <Routes route={route} />
     </Box>
   );
-  // Engine management must stay reachable when the active engine is down.
-  return <Layout route={route}>{route[0] === "engines" ? page : <EngineGate>{page}</EngineGate>}</Layout>;
+  // Engine management and AI access don't depend on the active engine, so they stay reachable when it is down.
+  return <Layout route={route}>{route[0] === "engines" || route[0] === "access" ? page : <EngineGate>{page}</EngineGate>}</Layout>;
 }

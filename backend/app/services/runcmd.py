@@ -12,12 +12,13 @@ def _q(s: str) -> str:
     return shlex.quote(s)
 
 
-async def docker_run_command(cid: str) -> str:
-    c = await query_json(f"containers/{cid}/json")
+async def docker_run_command(cid: str, query=query_json) -> str:
+    """`query`: how to ask the engine (the MCP server passes its own engine's client)."""
+    c = await query(f"containers/{cid}/json")
     cfg: dict[str, Any] = c.get("Config") or {}
     host: dict[str, Any] = c.get("HostConfig") or {}
     try:
-        img = await query_json(f"images/{c.get('Image')}/json")
+        img = await query(f"images/{c.get('Image')}/json")
         icfg = img.get("Config") or {}
     except Exception:
         icfg = {}
