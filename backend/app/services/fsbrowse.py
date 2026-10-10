@@ -1,11 +1,13 @@
 """Filesystem browsing through `docker exec` of busybox/coreutils tools (ls via find+stat, head, cat).
 
-Used for volume helpers (and, later, running containers). All paths are normalised and confined to
-`root` inside the target container.
+Used for volume helpers and running containers, and (with `run` = a command over SSH) for files on an
+SSH engine's server. All paths are normalised and confined to `root` inside the target container.
+Exit code 3 from the scripts means "permission denied" (raised as FsError 403), which only happens
+when they don't run as root: the server-files feature then retries through a helper container.
 """
 
 import posixpath
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 
 import aiodocker
 
@@ -49,6 +51,19 @@ async def _exec(cid: str, cmd: list[str]) -> tuple[int, bytes, bytes]:
 
 run_in = _exec  # used by fswrite (rm, stat)
 
+Runner = Callable[[list[str]], Awaitable[tuple[int, bytes, bytes]]]
+DENIED = 3  # the scripts' exit code for "no permission"
+# Tells "doesn't exist" from "can't get there": climbs to the nearest folder above that exists; if
+# that one can be entered, the path really is missing, otherwise it is out of reach.
+_MISSING_OR_DENIED = (
+    '{ D="$P"; while [ "$D" != / ]; do D=$(dirname "$D"); [ -e "$D" ] && break; done; '
+    'if [ -x "$D" ] || [ ! -d "$D" ]; then echo "$3" >&2; exit 2; fi; echo "permission denied" >&2; exit 3; }'
+)
+
+
+def denied(path: str) -> "FsError":
+    return FsError(f"Permission denied: {path}", 403)
+
 
 _TYPES = {
     "directory": "dir",
@@ -62,18 +77,20 @@ _TYPES = {
 }
 
 
-async def list_dir(cid: str, root: str, path: str) -> dict:
+async def list_dir(cid: str | None, root: str, path: str, run: Runner | None = None) -> dict:
     full = confine(root, path)
     # %F type | %s size | %Y mtime | %A mode | %U user | %G group | %n name (last: may contain SEP-free '|')
     fmt = SEP.join(["%F", "%s", "%Y", "%A", "%U", "%G", "%n"])
     # "$P/" (trailing slash) makes find follow the start path when it is a symlink to a directory.
     script = (
-        'P="$1"; [ -d "$P" ] || { echo "not a directory" >&2; exit 2; }; '
+        'P="$1"; [ -d "$P" ] || ' + _MISSING_OR_DENIED + '; [ -r "$P" ] && [ -x "$P" ] || { echo "permission denied" >&2; exit 3; }; '
         'find "$P/" -mindepth 1 -maxdepth 1 -exec stat -c "$2" {} + 2>/dev/null; '
         # For symlinks, report whether the target is a directory (so the UI can navigate into it).
         'find "$P/" -mindepth 1 -maxdepth 1 -type l -exec sh -c \'for l; do [ -d "$l" ] && echo "@@LINKDIR@@$l"; done\' _ {} + 2>/dev/null; true'
     )
-    code, out, err = await _exec(cid, ["sh", "-c", script, "sh", full, fmt])
+    code, out, err = await (run or (lambda cmd: _exec(cid, cmd)))(["sh", "-c", script, "sh", full, fmt, "not a directory"])
+    if code == DENIED:
+        raise denied(path)
     if code == 2:
         raise FsError(err.decode(errors="replace").strip() or "Not a directory", 404)
     entries = []
@@ -107,10 +124,82 @@ async def list_dir(cid: str, root: str, path: str) -> dict:
     return {"path": rel, "entries": entries}
 
 
-async def read_preview(cid: str, root: str, path: str) -> dict:
+SEARCH_LIMIT = 500  # most matches returned
+SEARCH_SECONDS = 20  # where the system has `timeout`; the search is stopped there after this long
+_GLOB = str.maketrans({"\\": "\\\\", "*": "\\*", "?": "\\?", "[": "\\["})
+
+
+def _entry(line: str, root: str) -> dict | None:
+    """One line of `stat -c` output in list_dir's format as an entry (path relative to root)."""
+    parts = line.split(SEP, 6)
+    if len(parts) != 7:
+        return None
+    ftype, size, mtime, mode, user, group, name = parts
+    name = posixpath.normpath(name)
+    return {
+        "name": posixpath.basename(name),
+        "path": "/" + posixpath.relpath(name, root) if name != root else "/",
+        "type": _TYPES.get(ftype, "other"),
+        "size": int(size) if size.isdigit() else None,
+        "mtime": int(mtime) if mtime.isdigit() else None,
+        "mode": mode,
+        "owner": f"{user}:{group}",
+        "linkToDir": False,
+    }
+
+
+async def search_names(cid: str | None, root: str, path: str, query: str, run: Runner | None = None) -> dict:
+    """Files and folders below `path` whose name contains `query` (any case), at most SEARCH_LIMIT.
+    Never looks into /proc, /sys or /dev, doesn't follow symbolic links, and leaves out what the
+    user running it may not read ("skipped" says that happened)."""
     full = confine(root, path)
-    script = 'F="$1"; [ -f "$F" ] || { echo "not a regular file" >&2; exit 2; }; stat -c %s "$F"; head -c "$2" "$F"'
-    code, out, err = await _exec(cid, ["sh", "-c", script, "sh", full, str(PREVIEW_LIMIT + 1)])
+    query = query.strip()
+    if len(query) < 2 or len(query) > 100 or "/" in query or "\0" in query:
+        raise FsError("Type at least two characters of the name (without /)")
+    runner = run or (lambda cmd: _exec(cid, cmd))
+    # find itself prints (so it stops when `head` has enough); its exit code goes to the last line.
+    # 124 (GNU) and 143 (BusyBox) are `timeout`'s "took too long".
+    script = (
+        'P="$1"; [ -d "$P" ] || ' + _MISSING_OR_DENIED + '; [ -r "$P" ] && [ -x "$P" ] || { echo "permission denied" >&2; exit 3; }; '
+        'T=""; command -v timeout >/dev/null 2>&1 && T="timeout $4"; '
+        # From "/" find prints "//proc", hence both spellings. Its complaints come along on the same
+        # stream (they start with "find:", paths with "/"), which tells us when folders were skipped.
+        '{ $T find "$P/" -mindepth 1 \\( -path /proc -o -path /sys -o -path /dev -o -path //proc -o -path //sys -o -path //dev \\) -prune -o -iname "$2" -print 2>&1; '
+        'echo "@@EXIT@@$?"; } | head -n "$5"'
+    )
+    pattern = "*" + query.translate(_GLOB) + "*"
+    code, out, err = await runner(["sh", "-c", script, "sh", full, pattern, "not a directory", str(SEARCH_SECONDS), str(SEARCH_LIMIT + 3)])
+    if code == DENIED:
+        raise denied(path)
+    if code == 2:
+        raise FsError(err.decode(errors="replace").strip() or "Not a directory", 404)
+    found, timed_out, skipped, finished = [], False, False, False
+    for line in out.decode(errors="replace").splitlines():
+        if line.startswith("@@EXIT@@"):
+            finished = True
+            timed_out = line[len("@@EXIT@@") :].strip() in ("124", "143", "137")
+        elif not line.startswith("/"):
+            skipped = skipped or "Permission denied" in line
+        else:
+            found.append(posixpath.normpath("/" + line.lstrip("/")))
+    truncated = len(found) > SEARCH_LIMIT or not finished
+    found = found[:SEARCH_LIMIT]
+    entries: list[dict] = []
+    fmt = SEP.join(["%F", "%s", "%Y", "%A", "%U", "%G", "%n"])
+    for i in range(0, len(found), 100):
+        _code, stat_out, _err = await runner(["stat", "-c", fmt, "--", *found[i : i + 100]])
+        entries += [e for e in (_entry(line, root) for line in stat_out.decode(errors="replace").splitlines()) if e]
+    rel = "/" + posixpath.relpath(full, root) if full != root else "/"
+    entries.sort(key=lambda e: (e["path"].count("/"), e["path"].lower()))
+    return {"path": rel, "query": query, "entries": entries, "truncated": truncated, "timedOut": timed_out, "skipped": skipped}
+
+
+async def read_preview(cid: str | None, root: str, path: str, run: Runner | None = None) -> dict:
+    full = confine(root, path)
+    script = 'P="$1"; [ -f "$P" ] || ' + _MISSING_OR_DENIED + '; [ -r "$P" ] || { echo "permission denied" >&2; exit 3; }; stat -c %s "$P"; head -c "$2" "$P"'
+    code, out, err = await (run or (lambda cmd: _exec(cid, cmd)))(["sh", "-c", script, "sh", full, str(PREVIEW_LIMIT + 1), "not a regular file"])
+    if code == DENIED:
+        raise denied(path)
     if code == 2:
         raise FsError(err.decode(errors="replace").strip() or "Not a file", 404)
     size_line, _, data = out.partition(b"\n")

@@ -82,8 +82,10 @@ export function KebabMenu({ items, label }: { items: MenuEntry[]; label: string 
   );
 }
 
-function ActionCell({ busy, active, paused, onToggle, toggleLabel, menu, onDelete, name, toggleDisabledReason }: {
+function ActionCell({ busy, active, paused, onToggle, toggleLabel, menu, onDelete, name, toggleDisabledReason, startRest }: {
   toggleDisabledReason?: string;
+  /** A project with some containers stopped: a start button for those, next to Stop all. */
+  startRest?: { label: string; onClick: () => void };
   busy: boolean;
   active: boolean;
   paused?: boolean;
@@ -96,6 +98,13 @@ function ActionCell({ busy, active, paused, onToggle, toggleLabel, menu, onDelet
   const stop = (e: MouseEvent) => e.stopPropagation();
   return (
     <Stack direction="row" alignItems="center" justifyContent="flex-end" spacing={0.25} onClick={stop}>
+      {startRest && !busy && (
+        <Tooltip title={startRest.label}>
+          <IconButton aria-label={`${startRest.label} of ${name}`} onClick={startRest.onClick}>
+            <PlayArrowIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
+      )}
       <Box sx={{ width: 30, display: "flex", justifyContent: "center" }}>
         {busy ? (
           <CircularProgress size={16} />
@@ -237,6 +246,8 @@ export function ProjectRow({ g, expanded, onToggleExpand, checked, indeterminate
   const isStack = swarm && !!g.containers[0]?.stack;
   const swarmTarget: [string, string, string] = isStack ? ["swarm", "stacks", g.name] : ["swarm", "services", g.containers[0]?.swarmServiceId ?? g.name];
   const anyActive = g.containers.some((c) => isActive(c.state));
+  // What the project's start action starts (see backend routers/projects.py).
+  const stopped = g.containers.filter((c) => c.state === "created" || c.state === "exited" || c.state === "dead").length;
   const allPaused = g.containers.every((c) => c.state === "paused" || !isActive(c.state)) && g.containers.some((c) => c.state === "paused");
   const open = (tab?: string) => (swarm ? navigate(...swarmTarget, ...(tab ? [tab] : [])) : navigate("projects", g.name, ...(tab ? [tab] : [])));
   const removeSwarm = () => {
@@ -317,6 +328,7 @@ export function ProjectRow({ g, expanded, onToggleExpand, checked, indeterminate
           toggleLabel={anyActive ? "Stop all" : "Start all"}
           toggleDisabledReason={swarm ? "Managed by Swarm: scale or remove it in the Swarm view" : undefined}
           onToggle={() => void projectAction(g.name, anyActive ? "stop" : "start")}
+          startRest={!swarm && anyActive && stopped > 0 ? { label: `Start the ${stopped} stopped`, onClick: () => void projectAction(g.name, "start") } : undefined}
           menu={menu}
           onDelete={() => (swarm ? removeSwarm() : void deleteProject(g.name, g.containers.length))}
           name={g.name}

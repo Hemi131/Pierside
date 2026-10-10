@@ -11,7 +11,9 @@ Nothing is shared until you create a connection.
 3. Choose **which containers** it covers: all of them, or tick them in the list. Ticking a Compose project covers its containers, including ones it gets later. Below the list you can add name patterns for containers or projects that don't exist yet: `*` matches any text, so `shop-*` covers `shop-web` and `shop-db`.
 4. Tick **what the assistant may do** (see below).
 5. Choose **how the assistant gets in** (see the next section) and create it.
-6. Copy the command that is shown and run it in a terminal.
+6. In the dialog that opens, choose **Add to Claude Code** or **Add to Devin CLI**. The dialog shows the command the button runs; where there is no button (see below), run that command in a terminal yourself.
+
+The **Add to …** button runs the command shown in the dialog for you (`claude mcp add …` or `devin mcp add …`) and replaces an older entry of the same name. With **Available in all my projects** switched off, choose the project folder first: the command then runs in that folder and the assistant has the access only there. The entry stays in your own assistant settings; nothing is written into the folder. It appears when Pierside runs inside Rancher Desktop and finds the assistant installed for your user; a running Claude Code session picks the new server up with `/mcp` or at its next start. Removing a connection in Pierside also removes it from the assistants that have it under that name.
 
 For Claude Code the command looks like this:
 
@@ -19,7 +21,7 @@ For Claude Code the command looks like this:
 claude mcp add --scope user pierside-webshop -- docker exec -i <pierside container> python -m app.mcp_stdio --profile 1a2b3c4d5e6f
 ```
 
-With `--scope user` Claude Code has the access in all your projects. Switch off **Available in all my projects** in the dialog to get a command without it; that one registers the access only for the project folder you run it in. In Claude Code, `/mcp` shows whether it is connected.
+With `--scope user` Claude Code has the access in all your projects. Without **Available in all my projects** the command has no such flag and registers the access only for the project folder it is run in. In Claude Code, `/mcp` shows whether it is connected.
 
 The dialog's **Devin CLI** tab has the same command for Devin's command-line tool:
 

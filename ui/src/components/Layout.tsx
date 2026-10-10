@@ -28,6 +28,8 @@ import TerminalIcon from "@mui/icons-material/Terminal";
 import LanOutlinedIcon from "@mui/icons-material/LanOutlined";
 import PieChartOutlineIcon from "@mui/icons-material/PieChartOutline";
 import SmartToyOutlinedIcon from "@mui/icons-material/SmartToyOutlined";
+import FolderOpenOutlinedIcon from "@mui/icons-material/FolderOpenOutlined";
+import DonutLargeOutlinedIcon from "@mui/icons-material/DonutLargeOutlined";
 
 const SECTIONS = [
   { key: "containers", label: "Containers", icon: <ViewInArOutlinedIcon fontSize="small" /> },
@@ -204,7 +206,7 @@ function Sidebar({ route }: { route: string[] }) {
   );
 }
 
-function Footer({ terminalOpen, onToggleTerminal }: { terminalOpen: boolean; onToggleTerminal: () => void }) {
+function Footer({ route, terminalOpen, onToggleTerminal }: { route: string[]; terminalOpen: boolean; onToggleTerminal: () => void }) {
   const { engine, totals, socket } = useEngine();
   const ok = engine?.ok;
   const ncpu = totals?.ncpu ?? engine?.info?.ncpu;
@@ -241,6 +243,33 @@ function Footer({ terminalOpen, onToggleTerminal }: { terminalOpen: boolean; onT
           </Typography>
         </Tooltip>
       )}
+      {/* Only while an SSH engine is active: the files of that server (views/serverfiles). */}
+      {engine?.engine?.type === "ssh" && (
+        <Tooltip describeChild title="Browse and edit the files of this server">
+          <Button
+            size="small"
+            color={route[0] === "server-files" ? "primary" : "inherit"}
+            startIcon={<FolderOpenOutlinedIcon fontSize="small" />}
+            onClick={() => navigate("server-files")}
+            sx={{ minHeight: 0, py: 0.25 }}
+          >
+            Server files
+          </Button>
+        </Tooltip>
+      )}
+      {engine?.engine?.type === "ssh" && (
+        <Tooltip describeChild title="See what takes the disk space on this server">
+          <Button
+            size="small"
+            color={route[0] === "server-disk" ? "primary" : "inherit"}
+            startIcon={<DonutLargeOutlinedIcon fontSize="small" />}
+            onClick={() => navigate("server-disk")}
+            sx={{ minHeight: 0, py: 0.25 }}
+          >
+            Server disk
+          </Button>
+        </Tooltip>
+      )}
       <Tooltip describeChild title={terminalOpen ? "Hide the terminal" : "Docker console (local engine) or a shell on the server (SSH engine)"}>
         <Button size="small" color={terminalOpen ? "primary" : "inherit"} startIcon={<TerminalIcon fontSize="small" />} onClick={onToggleTerminal} sx={{ minHeight: 0, py: 0.25 }}>
           Terminal
@@ -267,7 +296,7 @@ export function Layout({ route, children }: { route: string[]; children: ReactNo
           </Box>
         </Box>
         {terminalOpen && <TerminalPanel onClose={() => setTerminalOpen(false)} />}
-        <Footer terminalOpen={terminalOpen} onToggleTerminal={() => setTerminalOpen(!terminalOpen)} />
+        <Footer route={route} terminalOpen={terminalOpen} onToggleTerminal={() => setTerminalOpen(!terminalOpen)} />
       </Box>
     </EngineFrame>
   );

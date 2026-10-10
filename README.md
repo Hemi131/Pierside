@@ -40,20 +40,21 @@ The `docker pull` matters: Rancher Desktop installs from the image already on yo
 - **Containers:** live list grouped by Compose project, start/stop/restart/delete (single, project or bulk), port links, CPU usage, port-conflict hints, health checks and alerts for crashing or out-of-memory containers.
 - **Container details:** live logs with search, timestamps and download; inspect; bind mounts; an interactive shell; a debug shell for containers that have none; a file browser; live stats.
 - **Compose:** merged, colour-coded logs of all services; Up, Down, Pull and recreate, and View configuration with the common flags. Projects stay listed after `down`.
-- **Files:** browse, upload, edit (code editor with syntax highlighting), delete and change permissions, in containers and in volumes.
+- **Files:** browse, find by name, upload, edit, delete and change permissions, in containers and in volumes. The code editor has syntax highlighting, error checking for JSON, YAML and Compose files, a diff of your changes before saving, and VS Code shortcuts.
 - **Images:** pull with progress, run with options, inspect layers, prune, copy an image to another engine without a registry.
 - **Volumes and networks:** create, inspect, prune; connect and disconnect containers.
 - **Ports:** forward a container port to `localhost` without recreating the container, including from a remote server.
 - **Disk usage:** what takes space, with one-click cleanup.
-- **Remote engines:** manage Docker on other machines over SSH; give each a colour so production is hard to miss.
+- **Remote engines:** manage Docker on other machines over SSH; give each a colour so production is hard to miss. For such a server Pierside also browses and edits its files (switching to Docker where your user has no permission) and shows what takes its disk space.
 - **Swarm:** stacks, services, tasks, nodes, secrets and configs.
 - **Terminal:** a Docker console for the local engine, a full shell on SSH engines.
-- **AI access:** a built-in MCP server lets an assistant such as Claude Code work with your engines within limits you set, from reading one project's logs up to nearly everything this window can do, with your approval in Pierside instead of a stored secret.
+- **AI access:** a built-in MCP server lets an assistant such as Claude Code work with your engines within limits you set, from reading one project's logs up to nearly everything this window can do, with your approval in Pierside instead of a stored secret. One click adds a connection to Claude Code or Devin CLI.
 
 ## Documentation
 
 - [Install and update](docs/install-and-update.md)
 - [Remote engines over SSH](docs/remote-engines.md)
+- [What works where: Rancher Desktop or separate window, local or SSH engine](docs/what-works-where.md)
 - [Compose projects](docs/compose.md)
 - [Ports and forwarding](docs/ports.md)
 - [Files, volumes and the editor](docs/files-and-volumes.md)

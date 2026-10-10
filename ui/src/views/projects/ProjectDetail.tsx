@@ -180,6 +180,8 @@ export function ProjectDetail({ name }: { name: string }) {
           )}
         </Box>
         <Stack direction="row" spacing={1}>
+          {anyActive && cs.some((c) => c.state === "created" || c.state === "exited" || c.state === "dead") &&
+            btn("Start all", <PlayArrowIcon fontSize="small" />, () => void projectAction(name, "start"))}
           {anyActive
             ? btn("Stop all", <StopIcon fontSize="small" />, () => void projectAction(name, "stop"))
             : btn("Start all", <PlayArrowIcon fontSize="small" />, () => void projectAction(name, "start"))}

@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.config import WS_TOKEN, public_port
 from app.security import DEV_ORIGINS
-from app.routers import compose, containers, engines as engines_router, forwards as forwards_router, images, mcp, networks, projects, standalone, swarm, system, volumes
+from app.routers import compose, containers, engines as engines_router, forwards as forwards_router, hostdisk, hostfs, images, mcp, networks, projects, standalone, swarm, system, volumes
 from app.services.docker_client import close_docker, get_docker
 from app.services.engines import engines
 from app.services.hub import hub
@@ -97,6 +97,8 @@ app.include_router(projects.router)
 app.include_router(compose.router)
 app.include_router(forwards_router.router)
 app.include_router(volumes.router)
+app.include_router(hostfs.router)
+app.include_router(hostdisk.router)
 app.include_router(networks.router)
 app.include_router(system.router)
 app.include_router(images.router)

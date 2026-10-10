@@ -29,7 +29,7 @@ Minimal images have no `sh`. The Exec tab offers a **debug shell**: a helper con
 
 ## Compose actions are greyed out
 
-On the local engine, Compose commands run through Rancher Desktop and are only available in the Pierside tab inside Rancher Desktop, not in the separate browser window. See [Compose projects](compose.md).
+On the local engine, Compose commands run through Rancher Desktop and are only available in the Pierside tab inside Rancher Desktop, not in the separate browser window. See [Compose projects](compose.md) and [What works where](what-works-where.md).
 
 ## `unknown flag: --ansi` when running Compose on a server
 

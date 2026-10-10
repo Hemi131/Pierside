@@ -24,11 +24,14 @@ Give an engine a colour (when adding it, or **Engines → Colour**). While that 
 
 ## What differs on a remote engine
 
-| | Local engine | SSH engine |
-|---|---|---|
-| Compose Up/Down | Runs `docker compose` on your machine through Rancher Desktop | Runs `docker compose` on the server, where the files are |
-| Terminal (footer) | Docker console: `docker …` commands only | A full shell on the server |
-| Port forwarding | Container port → your `localhost` | Remote container port → your `localhost`, through the SSH connection |
+Most of Pierside works the same on a remote engine. In short:
+
+- **Compose** runs on the server, where the project's files are, instead of on your computer.
+- **Terminal** in the bottom bar is a full shell on the server instead of a Docker console.
+- **Server files** in the bottom bar browses and edits the server's own files, and **Server disk** next to it shows what takes the server's disk space; both exist only for SSH engines.
+- **Port links** open the server's address, and **Forward a port** brings a remote container's port to your `localhost` through the SSH connection.
+
+The full list, with the reason for each difference, is in [What works where](what-works-where.md#local-engine-or-ssh-engine).
 
 ## Where credentials are stored
 

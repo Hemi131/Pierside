@@ -12,5 +12,38 @@
       "root": "/ui",
       "src": "index.html"
     }
+  },
+  "host": {
+    "binaries": [
+      {
+        "windows": [
+          {
+            "path": "/host/windows/pierside-mcp-setup.exe"
+          }
+        ],
+        "darwin": [
+          {
+            "path": "/host/darwin/pierside-mcp-setup"
+          },
+          {
+            "path": "/host/darwin/pierside-mcp-setup-amd64"
+          },
+          {
+            "path": "/host/darwin/pierside-mcp-setup-arm64"
+          }
+        ],
+        "linux": [
+          {
+            "path": "/host/linux/pierside-mcp-setup"
+          },
+          {
+            "path": "/host/linux/pierside-mcp-setup-amd64"
+          },
+          {
+            "path": "/host/linux/pierside-mcp-setup-arm64"
+          }
+        ]
+      }
+    ]
   }
 }

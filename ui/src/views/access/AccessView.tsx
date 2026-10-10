@@ -35,13 +35,15 @@ import {
   Typography,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
+import FolderOpenOutlinedIcon from "@mui/icons-material/FolderOpenOutlined";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import KeyOutlinedIcon from "@mui/icons-material/KeyOutlined";
 import TerminalIcon from "@mui/icons-material/Terminal";
 import SmartToyOutlinedIcon from "@mui/icons-material/SmartToyOutlined";
-import { api } from "../../api/ddclient";
+import { api, dd } from "../../api/ddclient";
+import { addToAssistant, Assistant, ASSISTANT_LABEL, canSetUp, installedAssistants, removeFromAssistants } from "../../api/assistants";
 import { useResource } from "../../hooks/useResource";
 import { EmptyState, PageHeader } from "../../components/common";
 import { useFeedback } from "../../components/Feedback";
@@ -228,7 +230,7 @@ function trustText(p: Profile): string {
   return "Asks you each session";
 }
 
-function CopyBlock({ text, label }: { text: string; label: string }) {
+function CopyBlock({ text, label, onCopy }: { text: string; label: string; onCopy?: () => void }) {
   const { toast } = useFeedback();
   return (
     <Stack direction="row" alignItems="flex-start" spacing={1} sx={{ p: 1.5, borderRadius: 1, bgcolor: "action.hover" }}>
@@ -236,7 +238,7 @@ function CopyBlock({ text, label }: { text: string; label: string }) {
         {text}
       </Box>
       <Tooltip title="Copy">
-        <IconButton size="small" onClick={() => void copyText(text).then(() => toast("success", `${label} copied`))} aria-label={`Copy ${label}`}>
+        <IconButton size="small" onClick={() => void copyText(text).then(() => (toast("success", `${label} copied`), onCopy?.()))} aria-label={`Copy ${label}`}>
           <ContentCopyIcon fontSize="small" />
         </IconButton>
       </Tooltip>
@@ -251,8 +253,50 @@ function CopyBlock({ text, label }: { text: string; label: string }) {
 function ConnectDialog({ shown, container, onClose }: { shown: { profile: Profile; token: string | null } | null; container: string; onClose: () => void }) {
   const [tab, setTab] = useState(0);
   // Whether the Claude Code / Devin CLI command registers the server for all the user's projects or only one.
-  const [everywhere, setEverywhere] = usePersistentState("access.allProjects", true);
+  // Starts switched on every time the dialog opens: one project is the exception.
+  const [everywhere, setEverywhere] = useState(true);
+  // Whether the user has taken the connection somewhere yet (added with the button, or copied it).
+  const [used, setUsed] = useState(false);
+  const { confirm } = useFeedback();
+  useEffect(() => {
+    setEverywhere(true);
+    setUsed(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shown?.profile.id]);
+  // One-click setup: which assistants are installed on this computer, and the outcome of the last try.
+  const [installed, setInstalled] = useState<Partial<Record<Assistant, string>> | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [added, setAdded] = useState<{ assistant: Assistant; ok: boolean; text: string } | null>(null);
+  useEffect(() => {
+    if (!shown || !canSetUp) return;
+    installedAssistants()
+      .then(setInstalled)
+      .catch(() => setInstalled({}));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shown?.profile.id]);
+  // For one project only: the folder the assistant's command is run in (remembered between dialogs).
+  const [folder, setFolder] = usePersistentState("access.projectFolder", "");
+  useEffect(() => setAdded(null), [shown?.profile.id, tab, everywhere, folder]);
   if (!shown) return null;
+  const here = everywhere || !canSetUp ? "" : folder;
+  // A token can't be shown again: don't let it slip away with an accidental click.
+  const close = async () => {
+    if (shown.token && !used) {
+      const ok = await confirm({
+        title: "Close without using the token?",
+        message: "You haven't added or copied this connection yet, and its access token is not shown again. You would have to create a new token with the key button.",
+        confirmLabel: "Close anyway",
+        destructive: true,
+      });
+      if (!ok) return;
+    }
+    onClose();
+  };
+  const trusted = shown.profile.trustAlways || (!!shown.profile.trustedUntil && shown.profile.trustedUntil * 1000 > Date.now());
+  const pickFolder = async () => {
+    const res = (await dd!.desktopUI.dialog.showOpenDialog({ properties: ["openDirectory"] })) as { canceled: boolean; filePaths: string[] };
+    if (!res.canceled && res.filePaths[0]) setFolder(res.filePaths[0]);
+  };
   const name = `pierside-${slug(shown.profile.name)}`;
   const backend = container || "<pierside backend container>";
   const args = shown.token
@@ -261,18 +305,38 @@ function ConnectDialog({ shown, container, onClose }: { shown: { profile: Profil
   const claude = `claude mcp add ${everywhere ? "--scope user " : ""}${name} -- docker ${args.join(" ")}`;
   const devin = `devin mcp add ${everywhere ? "-s user " : ""}${name} -- docker ${args.join(" ")}`;
   const cli = tab === 0 ? { app: "Claude Code", command: claude } : { app: "Devin CLI", command: devin };
+  const assistant: Assistant = tab === 0 ? "claude" : "devin";
+  // Whether Pierside can add it itself (inside Rancher Desktop, with the assistant installed).
+  const oneClick = canSetUp && !!installed?.[assistant];
+  const addNow = async () => {
+    setAdding(true);
+    try {
+      await addToAssistant(assistant, name, args, here || undefined);
+      setUsed(true);
+      setAdded({ assistant, ok: true, text: `Added to ${ASSISTANT_LABEL[assistant]} as ${name}, ${here ? `for ${here}` : "for all your projects"}.` });
+    } catch (e) {
+      setAdded({ assistant, ok: false, text: (e as Error).message });
+    } finally {
+      setAdding(false);
+    }
+  };
   const json = JSON.stringify({ mcpServers: { [name]: { command: "docker", args } } }, null, 2);
   return (
-    <Dialog open onClose={onClose} maxWidth="md" fullWidth>
+    <Dialog open onClose={() => void close()} maxWidth="md" fullWidth>
       <DialogTitle>Connect "{shown.profile.name}"</DialogTitle>
       <DialogContent>
         {shown.token ? (
           <Alert severity="warning" sx={{ mb: 2 }}>
-            Copy this now. The access token inside it is shown only once; if you lose it, create a new one with the key button.
+            The access token in the command is shown only once. Add or copy it now; if you lose it, create a new one with the key button.
+          </Alert>
+        ) : trusted ? (
+          <Alert severity="info" sx={{ mb: 2 }}>
+            {shown.profile.trustAlways ? "You trust this connection" : `You trust this connection until ${new Date((shown.profile.trustedUntil ?? 0) * 1000).toLocaleDateString()}`}, so the
+            assistant can use it without asking you first. The command contains no secret.
           </Alert>
         ) : (
           <Alert severity="info" sx={{ mb: 2 }}>
-            This command contains no secret. When the assistant first uses the connection, Pierside asks you to allow it.
+            The command contains no secret. When the assistant first uses the connection, Pierside asks you to allow it.
           </Alert>
         )}
         <Tabs value={tab} onChange={(_e, v: number) => setTab(v)} sx={{ mb: 2, minHeight: 36 }}>
@@ -282,44 +346,89 @@ function ConnectDialog({ shown, container, onClose }: { shown: { profile: Profil
         </Tabs>
         {tab < 2 ? (
           <>
-            <Typography sx={{ mb: 1 }}>
-              {everywhere
-                ? `Run this in a terminal on this computer. ${cli.app} then has the access in all your projects:`
-                : `Run this in a terminal on this computer, inside the project folder where ${cli.app} should have the access:`}
-            </Typography>
-            <CopyBlock text={cli.command} label="Command" />
-            <FormControlLabel
-              sx={{ mt: 1 }}
-              control={<Switch size="small" checked={everywhere} onChange={(e) => setEverywhere(e.target.checked)} />}
-              label="Available in all my projects"
-            />
-            <Typography variant="body2" color="text.secondary">
-              {tab === 0 ? (
+            <Stack direction="row" alignItems="center" flexWrap="wrap" useFlexGap spacing={1.5} sx={{ mb: 2 }}>
+              <FormControlLabel
+                sx={{ mr: 0 }}
+                control={<Switch size="small" checked={everywhere} onChange={(e) => setEverywhere(e.target.checked)} />}
+                label="Available in all my projects"
+              />
+              {!everywhere && canSetUp && (
                 <>
-                  Then start Claude Code and check <code>/mcp</code>.
-                </>
-              ) : (
-                <>
-                  Then check with <code>devin mcp list</code>.
+                  <Button variant="outlined" size="small" startIcon={<FolderOpenOutlinedIcon fontSize="small" />} onClick={() => void pickFolder()}>
+                    {folder ? "Change folder…" : "Choose project folder…"}
+                  </Button>
+                  {folder && (
+                    <Typography variant="body2" sx={{ fontFamily: MONO, wordBreak: "break-all" }}>
+                      {folder}
+                    </Typography>
+                  )}
                 </>
               )}
-            </Typography>
+            </Stack>
+            {oneClick ? (
+              <>
+                <Stack direction="row" alignItems="center" spacing={1.5} sx={{ mb: 1.5 }}>
+                  <Button variant="contained" disabled={adding || !container || (!everywhere && !here)} onClick={() => void addNow()}>
+                    {adding ? "Adding…" : `Add to ${cli.app}`}
+                  </Button>
+                  {!everywhere && !here && (
+                    <Typography variant="body2" color="text.secondary">
+                      Choose the project folder first.
+                    </Typography>
+                  )}
+                </Stack>
+                {added && added.assistant === assistant && (
+                  <Alert severity={added.ok ? "success" : "error"} sx={{ mb: 1.5 }}>
+                    {added.text}
+                    {added.ok && (assistant === "claude" ? " Start a new Claude Code session, or run /mcp in a running one." : " Start a new Devin session to use it.")}
+                  </Alert>
+                )}
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
+                  The button runs this for you:
+                </Typography>
+              </>
+            ) : (
+              <Typography sx={{ mb: 1 }}>
+                {canSetUp && installed && !installed[assistant] ? `${cli.app} wasn't found on this computer. ` : ""}
+                {everywhere ? "Run this in a terminal on this computer:" : "Run this in a terminal on this computer, inside the project folder:"}
+              </Typography>
+            )}
+            <CopyBlock text={here ? `cd "${here}"\n${cli.command}` : cli.command} label="Command" onCopy={() => setUsed(true)} />
+            {!oneClick && (
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                {tab === 0 ? (
+                  <>
+                    Then start Claude Code and check <code>/mcp</code>.
+                  </>
+                ) : (
+                  <>
+                    Then check with <code>devin mcp list</code>.
+                  </>
+                )}
+              </Typography>
+            )}
           </>
         ) : (
           <>
             <Typography sx={{ mb: 1 }}>Add this server to the client's MCP configuration (for example a project's <code>.mcp.json</code>):</Typography>
-            <CopyBlock text={json} label="Configuration" />
+            <CopyBlock text={json} label="Configuration" onCopy={() => setUsed(true)} />
           </>
         )}
         <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5 }}>
-          The assistant talks to Pierside through <code>docker exec</code>, so Rancher Desktop and Pierside must be running. The connection keeps working after
-          Pierside is updated; it stops if you remove it here or reinstall Pierside from a different image.
+          Rancher Desktop and Pierside must be running for the assistant to connect.
         </Typography>
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2 }}>
-        <Button variant="contained" onClick={onClose}>
-          Done
-        </Button>
+        {/* Nothing to confirm here: it only closes. It turns into "Done" once the connection was added or copied. */}
+        {used ? (
+          <Button variant="contained" onClick={onClose}>
+            Done
+          </Button>
+        ) : (
+          <Button color="inherit" onClick={() => void close()}>
+            Close
+          </Button>
+        )}
       </DialogActions>
     </Dialog>
   );
@@ -904,6 +1013,12 @@ export function AccessView() {
     try {
       await api.del(`/mcp-access/${p.id}`);
       toast("success", `${p.name} removed`);
+      // Also take it out of the assistants on this computer that have it under Pierside's name for it.
+      if (canSetUp) {
+        void removeFromAssistants(`pierside-${slug(p.name)}`)
+          .then((from) => from.length && toast("success", `Also removed from ${from.map((a) => ASSISTANT_LABEL[a]).join(" and ")}`))
+          .catch(() => undefined);
+      }
     } catch (e) {
       toast("error", (e as Error).message);
     }
@@ -1095,7 +1210,12 @@ export function AccessView() {
           void reload();
         }}
       />
-      <ConnectDialog shown={connect} container={data?.container ?? ""} onClose={() => setConnect(null)} />
+      {/* The connection as it is now (its trust may have changed since the dialog was opened). */}
+      <ConnectDialog
+        shown={connect && { ...connect, profile: data?.profiles.find((p) => p.id === connect.profile.id) ?? connect.profile }}
+        container={data?.container ?? ""}
+        onClose={() => setConnect(null)}
+      />
     </Box>
   );
 }

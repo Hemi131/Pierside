@@ -1,5 +1,5 @@
 /** File browser for volume stored data (read-only) and container files (upload, edit, new file/folder). */
-import { DragEvent, lazy, MouseEvent as ReactMouseEvent, Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { DragEvent, lazy, MouseEvent as ReactMouseEvent, ReactNode, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import {
   Alert,
   Box,
@@ -51,6 +51,9 @@ import { PermissionsDialog, PermissionsTarget } from "./PermissionsDialog";
 import WrapTextIcon from "@mui/icons-material/WrapText";
 import OpenInFullIcon from "@mui/icons-material/OpenInFull";
 import CloseFullscreenIcon from "@mui/icons-material/CloseFullscreen";
+import EditLocationAltOutlinedIcon from "@mui/icons-material/EditLocationAltOutlined";
+import SearchIcon from "@mui/icons-material/Search";
+import DifferenceOutlinedIcon from "@mui/icons-material/DifferenceOutlined";
 
 export interface FsEntry {
   name: string;
@@ -61,6 +64,16 @@ export interface FsEntry {
   mode: string;
   owner: string;
   linkToDir: boolean;
+}
+
+/** What a search below a folder found. Entries carry their full path. */
+interface SearchResult {
+  path: string;
+  query: string;
+  entries: FsEntry[];
+  truncated: boolean;
+  timedOut: boolean;
+  skipped: boolean;
 }
 
 interface Preview {
@@ -75,6 +88,8 @@ export interface FileBrowserApi {
   list: (path: string) => string; // vm.service URL
   preview: (path: string) => string; // vm.service URL
   download: (path: string) => string; // backend path (TCP)
+  /** Names below a folder that contain the text; vm.service URL. */
+  search?: (path: string, text: string) => string;
   /** Writable filesystems only (containers; volumes are browsed read-only). */
   write?: {
     upload: (dir: string, name: string) => string; // backend path (TCP), raw body
@@ -83,6 +98,10 @@ export interface FileBrowserApi {
     remove: string; // vm.service URL, POST {path}: a file, or a folder with its contents
     chmod: string; // vm.service URL, POST {path, mode, recursive}
   };
+  /** Sees every answer (server files: to show whether it went over SSH or through Docker). */
+  onResult?: (result: unknown) => void;
+  /** A failed request: resolve true to send it once more (e.g. after the user allowed something). */
+  onDenied?: (error: unknown) => Promise<boolean>;
 }
 
 // Loaded when the first file is opened: the editor and its languages are a large part of the bundle.
@@ -93,6 +112,7 @@ export const volumeFsApi = (name: string): FileBrowserApi => ({
   list: (p) => `/volumes/${q(name)}/files?path=${q(p)}`,
   preview: (p) => `/volumes/${q(name)}/file?path=${q(p)}`,
   download: (p) => `/volumes/${q(name)}/download?path=${q(p)}`,
+  search: (p, text) => `/volumes/${q(name)}/search?path=${q(p)}&q=${q(text)}`,
   // Changes go through a separate writable helper; browsing stays read-only (see backend helper.py).
   write: {
     upload: (dir, file) => `/volumes/${q(name)}/upload?path=${q(dir)}&filename=${q(file)}`,
@@ -107,6 +127,7 @@ export const containerFsApi = (id: string): FileBrowserApi => ({
   list: (p) => `/containers/${id}/files?path=${q(p)}`,
   preview: (p) => `/containers/${id}/file?path=${q(p)}`,
   download: (p) => `/containers/${id}/download?path=${q(p)}`,
+  search: (p, text) => `/containers/${id}/search?path=${q(p)}&q=${q(text)}`,
   write: {
     upload: (dir, name) => `/containers/${id}/upload?path=${q(dir)}&name=${q(name)}`,
     save: `/containers/${id}/file`,
@@ -166,7 +187,16 @@ function NameDialog({ title, dir, onClose }: { title: string | null; dir: string
   );
 }
 
-export function FileBrowser({ fs, emptyHint }: { fs: FileBrowserApi; emptyHint?: string }) {
+export function FileBrowser({ fs, emptyHint, start = "/", toolbar, goTo = false }: {
+  fs: FileBrowserApi;
+  emptyHint?: string;
+  /** The folder shown first. */
+  start?: string;
+  /** Extra controls at the end of the path bar. */
+  toolbar?: ReactNode;
+  /** A button to type a folder to go to. */
+  goTo?: boolean;
+}) {
   const { toast, confirm } = useFeedback();
   const fileInput = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState<{ name: string; pct: number; index: number; total: number } | null>(null);
@@ -178,6 +208,8 @@ export function FileBrowser({ fs, emptyHint }: { fs: FileBrowserApi; emptyHint?:
   const [isNew, setIsNew] = useState(false);
   // Line endings: the editor always holds \n; `eol` is what gets written back.
   const [eol, setEol] = useState<Eol>("\n");
+  // Review: the editor shows the edit as a diff against the file as loaded (read-only meanwhile).
+  const [reviewing, setReviewing] = useState(false);
   // The preview/editor panel: maximized over the whole window, or beside the list at a width the
   // user can drag (kept between sessions).
   const [maximized, setMaximized] = useState(false);
@@ -189,7 +221,12 @@ export function FileBrowser({ fs, emptyHint }: { fs: FileBrowserApi; emptyHint?:
   const [saving, setSaving] = useState(false);
   // One setting for preview and editor, so long lines look the same in both.
   const [wrap, setWrap] = usePersistentState("files.wrapLines", true);
-  const [path, setPath] = useState("/");
+  const [path, setPath] = useState(start);
+  const [typedPath, setTypedPath] = useState<string | null>(null);
+  // Find by name: typing narrows the folder shown; Enter looks through its subfolders too.
+  const [find, setFind] = useState("");
+  const [found, setFound] = useState<SearchResult | null>(null);
+  const [finding, setFinding] = useState(false);
   const [entries, setEntries] = useState<FsEntry[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -198,12 +235,30 @@ export function FileBrowser({ fs, emptyHint }: { fs: FileBrowserApi; emptyHint?:
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
 
+  // Every request goes through here, so the caller can watch answers and retry a refused one.
+  const call = useCallback(
+    async <T,>(run: () => Promise<T>): Promise<T> => {
+      try {
+        const r = await run();
+        fs.onResult?.(r);
+        return r;
+      } catch (e) {
+        if (!fs.onDenied || !(await fs.onDenied(e))) throw e;
+        const r = await run();
+        fs.onResult?.(r);
+        return r;
+      }
+    },
+    [fs],
+  );
+
   const load = useCallback(
     (p: string) => {
       setLoading(true);
       setError(null);
-      api
-        .get<{ path: string; entries: FsEntry[] }>(fs.list(p))
+      setFind("");
+      setFound(null);
+      call(() => api.get<{ path: string; entries: FsEntry[] }>(fs.list(p)))
         .then((r) => {
           setEntries(r.entries);
           setPath(r.path);
@@ -211,17 +266,16 @@ export function FileBrowser({ fs, emptyHint }: { fs: FileBrowserApi; emptyHint?:
         .catch((e) => setError((e as Error).message))
         .finally(() => setLoading(false));
     },
-    [fs],
+    [fs, call],
   );
 
-  useEffect(() => load("/"), [load]);
+  useEffect(() => load(start), [load, start]);
 
   const loadPreview = (p: string) => {
     setPreview(null);
     setPreviewError(null);
     setPreviewLoading(true);
-    api
-      .get<Preview>(fs.preview(p))
+    call(() => api.get<Preview>(fs.preview(p)))
       .then(setPreview)
       .catch((err) => setPreviewError((err as Error).message))
       .finally(() => setPreviewLoading(false));
@@ -233,6 +287,11 @@ export function FileBrowser({ fs, emptyHint }: { fs: FileBrowserApi; emptyHint?:
   const shown = (preview?.content ?? "").replace(/\r\n/g, "\n");
   const dirty =
     draft !== null && (isNew || draft !== (preview?.content ?? "").replace(/\r\n/g, "\n") || eol !== original.eol || original.mixed);
+
+  // Leaving the editor (saved, cancelled, another file) ends a review too.
+  useEffect(() => {
+    if (draft === null) setReviewing(false);
+  }, [draft]);
 
   const startEditing = () => {
     if (!preview) return;
@@ -276,11 +335,28 @@ export function FileBrowser({ fs, emptyHint }: { fs: FileBrowserApi; emptyHint?:
     return confirm({ title: "Discard changes?", message: "Your edits to this file haven't been saved.", confirmLabel: "Discard", destructive: true });
   };
 
+  const searchBelow = () => {
+    const text = find.trim();
+    if (!fs.search || text.length < 2) return;
+    const search = fs.search;
+    setFinding(true);
+    setError(null);
+    call(() => api.get<SearchResult>(search(path, text)))
+      .then(setFound)
+      .catch((e) => setError((e as Error).message))
+      .finally(() => setFinding(false));
+  };
+
+  // The rows shown: what a search found (with full paths), or the folder, narrowed while typing.
+  const needle = find.trim().toLowerCase();
+  const rows = found ? found.entries : needle ? (entries ?? []).filter((e) => e.name.toLowerCase().includes(needle)) : entries;
+  const rowPath = (e: FsEntry) => (found ? e.path : join(path, e.name));
+
   const open = async (e: FsEntry) => {
     if (!(await leaveEditor())) return;
     setDraft(null);
     setIsNew(false);
-    const p = join(path, e.name);
+    const p = rowPath(e);
     if (e.type === "dir" || e.linkToDir) {
       setSelected(null);
       setPreview(null);
@@ -318,7 +394,7 @@ export function FileBrowser({ fs, emptyHint }: { fs: FileBrowserApi; emptyHint?:
     for (const [i, f] of files.entries()) {
       setUploading({ name: f.name, pct: 0, index: i + 1, total: files.length });
       try {
-        await uploadToBackend(w.upload(dir, f.name), f, (sent, total) => setUploading({ name: f.name, pct: total ? (sent / total) * 100 : 0, index: i + 1, total: files.length }));
+        await call(() => uploadToBackend(w.upload(dir, f.name), f, (sent, total) => setUploading({ name: f.name, pct: total ? (sent / total) * 100 : 0, index: i + 1, total: files.length })));
         done++;
       } catch (e) {
         toast("error", `${f.name}: ${(e as Error).message}`);
@@ -348,7 +424,8 @@ export function FileBrowser({ fs, emptyHint }: { fs: FileBrowserApi; emptyHint?:
     });
     if (!ok) return;
     try {
-      await api.post(fs.write.remove, { path: p });
+      const remove = fs.write.remove;
+      await call(() => api.post(remove, { path: p }));
       toast("success", `${e.name} deleted`);
       if (selected === p || selected?.startsWith(p + "/")) {
         setDraft(null);
@@ -366,7 +443,8 @@ export function FileBrowser({ fs, emptyHint }: { fs: FileBrowserApi; emptyHint?:
     setPermissions(null);
     if (!change || !target || !fs.write) return;
     try {
-      await api.post(fs.write.chmod, { path: target.path, ...change });
+      const chmod = fs.write.chmod;
+      await call(() => api.post(chmod, { path: target.path, ...change }));
       toast("success", `Permissions of ${target.path.split("/").pop()} set to ${change.mode}`);
     } catch (e) {
       toast("error", (e as Error).message);
@@ -381,7 +459,8 @@ export function FileBrowser({ fs, emptyHint }: { fs: FileBrowserApi; emptyHint?:
     const p = join(path, name);
     if (kind === "folder") {
       try {
-        await api.post(fs.write.mkdir, { path: p });
+        const mkdir = fs.write.mkdir;
+        await call(() => api.post(mkdir, { path: p }));
         toast("success", `Folder ${name} created`);
         load(p);
       } catch (e) {
@@ -407,7 +486,8 @@ export function FileBrowser({ fs, emptyHint }: { fs: FileBrowserApi; emptyHint?:
     setSaving(true);
     try {
       const content = eol === "\r\n" ? draft.replace(/\r?\n/g, "\r\n") : draft.replace(/\r\n/g, "\n");
-      await api.put(fs.write.save, { path: selected, content });
+      const saveUrl = fs.write.save;
+      await call(() => api.put(saveUrl, { path: selected, content }));
       toast("success", `${selected.split("/").pop()} ${isNew ? "created" : "saved"}`);
       setPreview({ path: selected, size: new Blob([content]).size, truncated: false, binary: false, content });
       setDraft(null);
@@ -422,7 +502,7 @@ export function FileBrowser({ fs, emptyHint }: { fs: FileBrowserApi; emptyHint?:
 
   const download = (p: string) => {
     const name = p.split("/").pop() || "download";
-    downloadFromBackend(fs.download(p), name)
+    call(() => downloadFromBackend(fs.download(p), name))
       .then(() => toast("success", `Downloading ${name}`))
       .catch((e) => toast("error", (e as Error).message));
   };
@@ -440,24 +520,91 @@ export function FileBrowser({ fs, emptyHint }: { fs: FileBrowserApi; emptyHint?:
               </IconButton>
             </span>
           </Tooltip>
-          <Breadcrumbs sx={{ flex: 1, fontFamily: MONO, fontSize: 13 }} maxItems={8}>
-            <Link component="button" underline="hover" onClick={() => load("/")} aria-label="Root folder" sx={{ display: "flex", alignItems: "center" }}>
-              <FolderIcon sx={{ fontSize: 16 }} />
-            </Link>
-            {crumbs.map((c, i) => (
-              <Link
-                key={i}
-                component="button"
-                underline="hover"
-                color={i === crumbs.length - 1 ? "text.primary" : "primary"}
-                onClick={() => load("/" + crumbs.slice(0, i + 1).join("/"))}
-                sx={{ fontFamily: MONO, fontSize: 13 }}
-              >
-                {c}
+          {typedPath !== null ? (
+            <TextField
+              size="small"
+              autoFocus
+              value={typedPath}
+              onChange={(e) => setTypedPath(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && typedPath.trim().startsWith("/")) {
+                  load(typedPath.trim());
+                  setTypedPath(null);
+                } else if (e.key === "Escape") {
+                  e.stopPropagation();
+                  setTypedPath(null);
+                }
+              }}
+              onBlur={() => setTypedPath(null)}
+              placeholder="/path/to/folder"
+              inputProps={{ "aria-label": "Folder to go to", style: { fontFamily: MONO, fontSize: 13 } }}
+              sx={{ flex: 1 }}
+            />
+          ) : (
+            <Breadcrumbs sx={{ flex: 1, fontFamily: MONO, fontSize: 13 }} maxItems={8}>
+              <Link component="button" underline="hover" onClick={() => load("/")} aria-label="Root folder" sx={{ display: "flex", alignItems: "center" }}>
+                <FolderIcon sx={{ fontSize: 16 }} />
               </Link>
-            ))}
-          </Breadcrumbs>
-          {loading && <CircularProgress size={16} />}
+              {crumbs.map((c, i) => (
+                <Link
+                  key={i}
+                  component="button"
+                  underline="hover"
+                  color={i === crumbs.length - 1 ? "text.primary" : "primary"}
+                  onClick={() => load("/" + crumbs.slice(0, i + 1).join("/"))}
+                  sx={{ fontFamily: MONO, fontSize: 13 }}
+                >
+                  {c}
+                </Link>
+              ))}
+            </Breadcrumbs>
+          )}
+          {goTo && typedPath === null && (
+            <Tooltip title="Go to a folder by its path">
+              <IconButton onClick={() => setTypedPath(path)} aria-label="Go to a folder">
+                <EditLocationAltOutlinedIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          )}
+          {(loading || finding) && <CircularProgress size={16} />}
+          {fs.search && (
+            <TextField
+              size="small"
+              value={find}
+              onChange={(e) => {
+                setFind(e.target.value);
+                setFound(null);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") searchBelow();
+                else if (e.key === "Escape" && find) {
+                  e.stopPropagation();
+                  setFind("");
+                  setFound(null);
+                }
+              }}
+              placeholder="Find by name"
+              InputProps={{
+                startAdornment: <SearchIcon sx={{ fontSize: 16, mr: 0.5, color: "text.secondary" }} />,
+                endAdornment: find ? (
+                  <IconButton
+                    size="small"
+                    edge="end"
+                    aria-label="Clear the search"
+                    onClick={() => {
+                      setFind("");
+                      setFound(null);
+                    }}
+                  >
+                    <CloseIcon sx={{ fontSize: 14 }} />
+                  </IconButton>
+                ) : undefined,
+              }}
+              inputProps={{ "aria-label": "Find files by name", style: { fontSize: 13, paddingTop: 5, paddingBottom: 5 } }}
+              sx={{ width: 190 }}
+            />
+          )}
+          {toolbar}
           {fs.write && (
             <>
               <Tooltip title="Upload files here (or drop them on the list)">
@@ -541,11 +688,49 @@ export function FileBrowser({ fs, emptyHint }: { fs: FileBrowserApi; emptyHint?:
               <CircularProgress size={24} />
               <Typography color="text.secondary">Reading files…</Typography>
             </Stack>
-          ) : entries && entries.length === 0 ? (
+          ) : entries && entries.length === 0 && !found ? (
             <Typography color="text.secondary" sx={{ p: 3, textAlign: "center" }}>
               {path === "/" && emptyHint ? emptyHint : "This folder is empty."}
             </Typography>
+          ) : rows && rows.length === 0 ? (
+            <Stack alignItems="center" spacing={1} sx={{ p: 3 }}>
+              <Typography color="text.secondary">
+                {found ? `Nothing below ${found.path} has "${found.query}" in its name.` : `Nothing in this folder has "${find.trim()}" in its name.`}
+                {found?.timedOut ? " The search was stopped after 20 seconds, so it didn't get everywhere: try a subfolder." : ""}
+                {found?.skipped ? " Folders you can't read were skipped." : ""}
+              </Typography>
+              {!found && fs.search && find.trim().length >= 2 && (
+                <Button size="small" onClick={searchBelow} disabled={finding}>
+                  Search the subfolders too
+                </Button>
+              )}
+            </Stack>
           ) : (
+            <>
+            {(found || needle) && (
+              <Stack direction="row" alignItems="center" spacing={1} sx={{ px: 2, py: 0.75, borderBottom: 1, borderColor: "divider", bgcolor: "action.hover" }}>
+                <Typography variant="body2" color="text.secondary" sx={{ flex: 1 }}>
+                  {found ? (
+                    <>
+                      {found.entries.length}
+                      {found.truncated ? "+" : ""} below {found.path} with "{found.query}" in the name
+                      {found.truncated && !found.timedOut ? ` (the first ${found.entries.length})` : ""}
+                      {found.timedOut ? ". Stopped after 20 seconds: try a subfolder for the rest" : ""}
+                      {found.skipped ? ". Folders you can't read were skipped" : ""}
+                    </>
+                  ) : (
+                    <>
+                      {rows?.length} of {entries?.length} in this folder
+                    </>
+                  )}
+                </Typography>
+                {!found && fs.search && find.trim().length >= 2 && (
+                  <Button size="small" onClick={searchBelow} disabled={finding} sx={{ minHeight: 0, py: 0 }}>
+                    Search the subfolders too (Enter)
+                  </Button>
+                )}
+              </Stack>
+            )}
             <Table size="small" stickyHeader>
               <TableHead>
                 <TableRow>
@@ -560,15 +745,17 @@ export function FileBrowser({ fs, emptyHint }: { fs: FileBrowserApi; emptyHint?:
                 </TableRow>
               </TableHead>
               <TableBody>
-                {entries?.map((e) => {
-                  const p = join(path, e.name);
+                {rows?.map((e) => {
+                  const p = rowPath(e);
+                  // A search result is shown with where it is, below the folder searched.
+                  const label = found ? (found.path === "/" ? p.slice(1) : p.slice(found.path.length + 1)) : e.name;
                   return (
-                    <TableRow key={e.name} hover selected={selected === p} onClick={() => void open(e)} sx={{ cursor: e.type === "other" ? "default" : "pointer" }}>
+                    <TableRow key={p} hover selected={selected === p} onClick={() => void open(e)} sx={{ cursor: e.type === "other" ? "default" : "pointer" }}>
                       <TableCell sx={{ pr: 0 }}>
                         <EntryIcon e={e} />
                       </TableCell>
                       <TableCell sx={{ fontFamily: MONO, fontSize: 12.5, wordBreak: "break-all" }}>
-                        {e.name}
+                        {label}
                         {e.type === "dir" || e.linkToDir ? "/" : ""}
                       </TableCell>
                       <TableCell align="right">{e.type === "file" ? formatBytes(e.size) : ""}</TableCell>
@@ -605,7 +792,7 @@ export function FileBrowser({ fs, emptyHint }: { fs: FileBrowserApi; emptyHint?:
                             </IconButton>
                           </Tooltip>
                         )}
-                        {fs.write && (
+                        {fs.write && !found && (
                           <Tooltip title={e.type === "dir" ? "Delete folder" : "Delete"}>
                             <IconButton onClick={() => void remove(e)} aria-label={`Delete ${e.name}`}>
                               <DeleteOutlineIcon fontSize="small" />
@@ -618,6 +805,7 @@ export function FileBrowser({ fs, emptyHint }: { fs: FileBrowserApi; emptyHint?:
                 })}
               </TableBody>
             </Table>
+            </>
           )}
         </Box>
       </Paper>
@@ -693,7 +881,7 @@ export function FileBrowser({ fs, emptyHint }: { fs: FileBrowserApi; emptyHint?:
               <>
                 <Button
                   size="small"
-                  sx={{ minWidth: 104 }}
+                  sx={{ minWidth: isNew ? 104 : 62 }}
                   onClick={() =>
                     void leaveEditor().then((ok) => {
                       if (!ok) return;
@@ -707,6 +895,22 @@ export function FileBrowser({ fs, emptyHint }: { fs: FileBrowserApi; emptyHint?:
                 >
                   Cancel
                 </Button>
+                {!isNew && (
+                  // Cancel is narrower for it, so Cancel + this take Download's room and Save stays put.
+                  <Tooltip disableInteractive title={reviewing ? "Back to editing" : "Review changes: compare with the file as loaded"}>
+                    <span>
+                      <IconButton
+                        onClick={() => setReviewing(!reviewing)}
+                        disabled={!reviewing && !dirty}
+                        color={reviewing ? "primary" : "default"}
+                        aria-label="Review changes"
+                        aria-pressed={reviewing}
+                      >
+                        <DifferenceOutlinedIcon fontSize="small" />
+                      </IconButton>
+                    </span>
+                  </Tooltip>
+                )}
                 <Button
                   size="small"
                   variant="contained"
@@ -771,6 +975,13 @@ export function FileBrowser({ fs, emptyHint }: { fs: FileBrowserApi; emptyHint?:
                 Showing the first 1 MB only.
               </Alert>
             )}
+            {reviewing && draft !== null && (eol !== original.eol || original.mixed) && (
+              <Alert severity="info" sx={{ m: 1, py: 0 }}>
+                {original.mixed
+                  ? `Line endings: all lines will be written as ${eol === "\r\n" ? "CRLF" : "LF"} (the file mixes both).`
+                  : `Line endings change from ${original.eol === "\r\n" ? "CRLF" : "LF"} to ${eol === "\r\n" ? "CRLF" : "LF"}.`}
+              </Alert>
+            )}
             {preview && !preview.binary && (
               // One editor for viewing and editing: clicking Edit only unlocks it, so the view stays put.
               <Box sx={{ flex: 1, minHeight: 0 }}>
@@ -780,6 +991,8 @@ export function FileBrowser({ fs, emptyHint }: { fs: FileBrowserApi; emptyHint?:
                     language={language}
                     value={draft ?? shown}
                     readOnly={draft === null}
+                    original={reviewing && draft !== null && !isNew ? shown : null}
+                    check={!preview.truncated}
                     wrap={wrap}
                     onChange={draft !== null ? setDraft : undefined}
                     onSave={() => {

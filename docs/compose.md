@@ -24,7 +24,9 @@ The options you used last are remembered per project. The ▶ button on a stoppe
 ## Where the command runs
 
 - **Local engine:** Pierside runs the real `docker compose` on your machine through Rancher Desktop, so builds, relative paths and `.env` files behave as in a terminal. This works in the Pierside tab inside Rancher Desktop. It is not available in the separate browser window, because only Rancher Desktop may run commands on your machine.
-- **SSH engine:** the command runs on the server, where the files are. The server needs the `docker compose` plugin.
+- **SSH engine:** the command runs on the server, where the files are. The server needs the `docker compose` plugin. This also works in the separate window.
+
+See [What works where](what-works-where.md) for the other differences between the two views and the two kinds of engine.
 
 ## If something fails
 

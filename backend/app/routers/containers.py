@@ -61,6 +61,12 @@ async def container_files(cid: str, path: str = "/"):
     return await _fs_call(cid, lambda: fsbrowse.list_dir(cid, "/", path))
 
 
+@router.get("/{cid}/search")
+async def search_files(cid: str, path: str, q: str):
+    """Files and folders below `path` whose name contains `q`."""
+    return await _fs_call(cid, lambda: fsbrowse.search_names(cid, "/", path, q))
+
+
 @router.get("/{cid}/file")
 async def container_file(cid: str, path: str):
     return await _fs_call(cid, lambda: fsbrowse.read_preview(cid, "/", path))

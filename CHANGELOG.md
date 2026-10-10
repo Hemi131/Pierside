@@ -4,6 +4,25 @@ Each release of Pierside, newest first. Install a specific one with `rdctl exten
 
 ## Unreleased
 
+## 1.0.0 - 2026-10-10
+
+Pierside 1.0: next to Docker itself, it now also works with the server behind an SSH engine.
+
+- **Server files:** with an SSH engine active, **Server files** in the bottom bar browses and edits the files of that server with the same file browser and editor, as your SSH user. Where that user has no permission but may use Docker, Pierside can work through a short-lived helper container instead (asked once per server, marked with a badge, read-only unless you change something).
+- **Server disk:** next to it, **Server disk** shows how full the server's filesystems are and which folders take the space. Folders are measured one by one as you open them, at low priority, with a time limit and a stop button; folders you can't read can be measured through Docker. It only reads.
+- **Find by name** in every file browser (containers, volumes, server files): typing narrows the current folder, Enter searches its subfolders.
+- **File editor:**
+  - **Review changes** shows your edit as a diff before saving.
+  - Syntax errors in JSON and YAML are underlined, and Compose files are checked against the official Compose schema (bundled, nothing is downloaded).
+  - VS Code keyboard shortcuts (Ctrl+D, Alt+Up/Down, Ctrl+/, Ctrl+L and more).
+  - Bracket pair colours and indentation guides.
+- **AI access:**
+  - **Add to Claude Code** / **Add to Devin CLI** registers a connection with one click, for all your projects or for one project folder you choose, through a small helper program Rancher Desktop installs with the extension. The dialog shows the command the button runs. Removing a connection also removes it from the assistant.
+  - The connection dialog is simpler, and says when a connection is trusted instead of promising a question that won't come.
+- **Containers:** a Compose project that is partly running has a start button for its stopped containers next to Stop all, in the list and on the project page.
+- **Files in containers:** a folder the container's user can't read now says "Permission denied" instead of looking empty.
+- **Docs:** [What works where](docs/what-works-where.md) lists what differs between the Pierside tab in Rancher Desktop and the separate window, and between the local engine and SSH engines, with the reason for each.
+
 ## 0.4.1 - 2026-10-07
 
 - AI access: the connection dialog also shows the command for Devin CLI (`devin mcp add`).

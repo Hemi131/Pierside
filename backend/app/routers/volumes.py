@@ -159,6 +159,16 @@ async def list_files(name: str, path: str = "/"):
         raise _fs_error(e)
 
 
+@router.get("/{name}/search")
+async def search_files(name: str, path: str, q: str):
+    """Files and folders below `path` whose name contains `q`."""
+    cid = await helper.helper_for(name)
+    try:
+        return await fsbrowse.search_names(cid, helper.MOUNT, path, q)
+    except fsbrowse.FsError as e:
+        raise _fs_error(e)
+
+
 @router.get("/{name}/file")
 async def preview_file(name: str, path: str):
     cid = await helper.helper_for(name)

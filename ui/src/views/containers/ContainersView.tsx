@@ -44,7 +44,7 @@ const HEADERS: { key?: SortKey; label: string; align?: "right"; width?: number |
   { label: "Port(s)", width: 150 },
   { key: "cpu", label: "CPU (%)", align: "right", width: 90 },
   { key: "started", label: "Last started", width: 130 },
-  { label: "Actions", align: "right", width: 130 },
+  { label: "Actions", align: "right", width: 160 },
 ];
 
 export function ContainersView() {

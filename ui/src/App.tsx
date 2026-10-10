@@ -13,6 +13,8 @@ import { SwarmView } from "./views/swarm/SwarmView";
 import { ServiceDetail, StackDetail } from "./views/swarm/SwarmDetails";
 import { EnginesView } from "./views/engines/EnginesView";
 import { AccessView } from "./views/access/AccessView";
+import { ServerFilesView } from "./views/serverfiles/ServerFilesView";
+import { ServerDiskView } from "./views/serverdisk/ServerDiskView";
 import { NetworksView } from "./views/networks/NetworksView";
 import { NetworkDetail } from "./views/networks/NetworkDetail";
 import { DiskUsageView } from "./views/disk/DiskUsageView";
@@ -47,6 +49,10 @@ function Routes({ route }: { route: string[] }) {
       return <EnginesView />;
     case "access":
       return <AccessView />;
+    case "server-files":
+      return <ServerFilesView key={id ?? ""} path={id} />;
+    case "server-disk":
+      return <ServerDiskView path={id} />;
     default:
       return <Placeholder title="Not found" note={route.join("/")} />;
   }
