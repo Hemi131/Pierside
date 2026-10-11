@@ -19,7 +19,7 @@ The difference comes from one rule: only Rancher Desktop may start programs on y
 | AI access: **Add to Claude Code / Devin CLI** and the folder chooser | Yes | No | The button runs the assistant's own command on your computer. In the separate window, copy the command and run it yourself. |
 | AI access: everything else (connections, approvals, activity) | Yes | Yes | |
 | Server files and Server disk (SSH engine) | Yes | Yes | |
-| Alerts and desktop notifications | Yes | Yes | The browser asks for permission once in the separate window. |
+| Alerts and desktop notifications | Yes | Yes | In Rancher Desktop the notification is Rancher's own (fixed title, no click action); in the separate window it is the browser's, which asks for permission once. |
 
 Other things to know about the separate window:
 

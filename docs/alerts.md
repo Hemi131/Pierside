@@ -28,6 +28,9 @@ A failing Swarm task is replaced by a new one each time, possibly on another nod
 
 ## Desktop notifications
 
-Click the version number in the bottom bar and switch on **Desktop notifications for container problems**. Pierside then also shows a notification of your operating system for each alert, when Pierside is open but not the window in front; click it to go to the container's logs or the service. Your browser or system may ask for permission first.
+Click the version number in the bottom bar and switch on **Desktop notifications for container problems**. Pierside then also shows a notification of your operating system for each alert. Switching it on shows a sample, so you can see that it works on your computer.
+
+- **In Rancher Desktop** the notification is shown by Rancher Desktop itself. Its title is always "Warning" or "Error"; the text starts with "Pierside" and says what happened and on which engine. Clicking it does nothing. It appears for every alert, also while you are looking at Pierside.
+- **In the separate window** it is your browser's notification, which asks for permission once. Clicking it goes to the container's logs or the service. It appears only when the Pierside window isn't the one in front.
 
 Notifications, like the alerts themselves, need Pierside to be open: in Rancher Desktop with the Pierside tab shown, or in the separate window. Nothing watches your containers while Pierside is closed. They cover the engine that is active; for the others, see **At a glance** on the Engines page ([Remote engines](remote-engines.md)).
