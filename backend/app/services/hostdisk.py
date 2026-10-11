@@ -18,9 +18,10 @@ import shlex
 import time
 
 from app.services import fsbrowse, hostfs
+from app.services.docker_client import query_json
 from app.services.engines import engines
 from app.services.fsbrowse import FsError
-from app.services.helper import _remove
+from app.services.helper import _remove, busy, lease, only_held_by
 
 log = logging.getLogger("pierside.hostdisk")
 
@@ -63,6 +64,42 @@ async def filesystems() -> list[dict]:
     return sorted(rows.values(), key=lambda r: r["mount"])
 
 
+# Where disk space usually goes on a Linux server: (path, what it is, what to do about it).
+# {docker} is the engine's data folder (usually /var/lib/docker).
+_USUAL_PLACES = (
+    ("{docker}/containers", "Container logs and state", "A container's log file grows without limit unless log rotation is set (max-size in the logging options)."),
+    ("{docker}/volumes", "Docker volumes", "Per volume on the Volumes page."),
+    ("{docker}", "All of Docker's data", "Images, volumes and the build cache are broken down, with clean-up, on the Disk usage page."),
+    ("/var/log/journal", "systemd journal", "`journalctl --vacuum-size=200M` shrinks it."),
+    ("/var/log", "System logs", ""),
+    ("/var/cache/apt", "Package cache (apt)", "`apt-get clean` empties it."),
+    ("/var/cache/dnf", "Package cache (dnf)", "`dnf clean all` empties it."),
+    ("/var/cache/yum", "Package cache (yum)", "`yum clean all` empties it."),
+    ("/var/lib/snapd", "Snap packages", "Old revisions are kept; `snap set system refresh.retain=2` limits them."),
+    ("/var/lib/systemd/coredump", "Crash dumps", ""),
+    ("/var/lib/containerd", "containerd data", ""),
+    ("/var/backups", "Backups", ""),
+    ("/tmp", "Temporary files", ""),
+    ("/var/tmp", "Temporary files kept across restarts", ""),
+    ("/home", "Home folders", ""),
+    ("/root", "root's home folder", ""),
+)
+
+
+async def usual_places() -> list[dict]:
+    """The usual places that exist on this server. Sizes are asked for separately (size())."""
+    hostfs.engine_id()
+    info = await query_json("info")
+    docker_root = (info.get("DockerRootDir") or "/var/lib/docker").rstrip("/")
+    places = [(path.replace("{docker}", docker_root), label, hint) for path, label, hint in _USUAL_PLACES]
+    # One round trip: which of them are there. Folders inside Docker's data can't be seen by an
+    # ordinary user, but they exist wherever Docker does.
+    script = 'for p; do [ -e "$p" ] && echo "$p"; done; true'
+    _code, out, _err = await hostfs.ssh_run(["sh", "-c", script, "sh", *[p for p, _l, _h in places]])
+    there = set(out.decode("utf-8", "replace").splitlines())
+    return [{"path": p, "label": label, "hint": hint} for p, label, hint in places if p in there or p.startswith(docker_root)]
+
+
 # Lowest priorities and a time limit, with whatever of nice / ionice / timeout the system has.
 _DU = (
     'N=""; command -v nice >/dev/null 2>&1 && N="nice -n 19"; I=""; command -v ionice >/dev/null 2>&1 && I="ionice -c3"; '
@@ -91,10 +128,19 @@ async def _du_ssh(path: str) -> str:
         out, _err = await asyncio.wait_for(proc.communicate(), SIZE_SECONDS + 15)
         return out or ""
     except asyncio.TimeoutError:
-        proc.terminate()
+        _stop(proc)
         return "@@EXIT@@124"
     finally:
         _running.discard(proc)
+
+
+def _stop(proc) -> None:
+    """Signal the remote process, then close its channel (sshd may ignore the signal request)."""
+    try:
+        proc.terminate()
+    except Exception as e:  # already gone
+        log.debug("couldn't signal a measurement: %s", e)
+    proc.close()
 
 
 async def size(path: str) -> dict:
@@ -119,7 +165,8 @@ async def size(path: str) -> dict:
                     cid = None  # a folder Pierside doesn't mount (/, /proc, …): keep the user's own figure
                 if cid:
                     inner = fsbrowse.confine(hostfs.MOUNT, hostfs._inside(mounted, path))
-                    _code, out, _err = await fsbrowse.run_in(cid, ["sh", "-c", _DU, "sh", inner, str(SIZE_SECONDS)])
+                    async with lease(cid, "du"):  # the reaper would remove the helper under a long `du`
+                        _code, out, _err = await fsbrowse.run_in(cid, ["sh", "-c", _DU, "sh", inner, str(SIZE_SECONDS)])
                     total2, unreadable2, timed_out2 = _parse(out.decode("utf-8", "replace"))
                     if total2 is not None:
                         result.update(bytes=total2, partial=unreadable2 or timed_out2, timedOut=timed_out2, via="docker")
@@ -132,12 +179,10 @@ async def cancel() -> None:
     global _generation
     _generation += 1
     for proc in list(_running):
-        try:
-            proc.terminate()
-        except Exception as e:  # already gone
-            log.debug("couldn't stop a measurement: %s", e)
-    # Measurements inside helpers end with their container.
+        _stop(proc)
+    # Measurements inside helpers end with their container; a helper that Server files is using
+    # meanwhile (a download) stays.
     for key, (cid, _last) in list(hostfs._helpers.items()):
-        if key[0] == engines.active_id and not key[2]:
+        if key[0] == engines.active_id and not key[2] and (not busy(cid) or only_held_by(cid, "du")):
             hostfs._helpers.pop(key, None)
             await _remove(cid)

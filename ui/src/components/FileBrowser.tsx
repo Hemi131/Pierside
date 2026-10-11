@@ -1,5 +1,5 @@
 /** File browser for volume stored data (read-only) and container files (upload, edit, new file/folder). */
-import { DragEvent, lazy, MouseEvent as ReactMouseEvent, ReactNode, Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { DragEvent, lazy, MouseEvent as ReactMouseEvent, ReactNode, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   Box,
@@ -283,10 +283,11 @@ export function FileBrowser({ fs, emptyHint, start = "/", toolbar, goTo = false 
 
   const detected = selected ? detectLanguage(selected) : "plain";
   const language = languageChoice && languageChoice.path === selected ? languageChoice.id : detected;
-  const original = detectEol(preview?.content ?? "");
-  const shown = (preview?.content ?? "").replace(/\r\n/g, "\n");
-  const dirty =
-    draft !== null && (isNew || draft !== (preview?.content ?? "").replace(/\r\n/g, "\n") || eol !== original.eol || original.mixed);
+  // Worked out once per loaded file, not on every key press: each of these reads the whole text.
+  const loaded = preview?.content ?? "";
+  const original = useMemo(() => detectEol(loaded), [loaded]);
+  const shown = useMemo(() => loaded.replace(/\r\n/g, "\n"), [loaded]);
+  const dirty = draft !== null && (isNew || draft !== shown || eol !== original.eol || original.mixed);
 
   // Leaving the editor (saved, cancelled, another file) ends a review too.
   useEffect(() => {

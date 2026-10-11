@@ -39,7 +39,7 @@ from app.services.engines import LOCAL_ID, engines
 from app.services.forwards import ForwardError, forwards
 from app.services.helper import HELPER_IMAGE, HELPER_LABEL
 from app.services.hub import cpu_percent, mem_usage
-from app.services.mcp_access import ACTIONS, MAX_LOG_LINES, REFUSAL_PAUSE_S, Profile, approvals, name_allowed, path_allowed
+from app.services.mcp_access import ACTIONS, REFUSAL_PAUSE_S, Profile, approvals, name_allowed, path_allowed
 from app.services.runcmd import docker_run_command
 
 MAX_OUTPUT_CHARS = 200_000
@@ -690,6 +690,9 @@ async def engine_events(cx: Ctx, args: dict) -> str:
         elif kind in ("image", "volume"):
             if not cx.profile.allows(kind + "s") or (attrs.get("container") and not cx.profile.all_containers()):
                 continue
+        elif kind in ("service", "secret", "config", "node"):
+            if not cx.profile.allows("swarm"):  # like list_swarm / list_swarm_secrets
+                continue
         elif not cx.profile.all_containers():
             continue
         row = {"time": _utc(e.get("time", 0)), "type": e.get("Type"), "action": e.get("Action"), "name": name if e.get("Type") != "image" else name[:80]}
@@ -889,16 +892,84 @@ async def delete_container(cx: Ctx, args: dict) -> str:
     return f"{_name(c)} deleted"
 
 
-_NO_BIND = ("/var/lib/docker", "/var/run", "/run", "/proc", "/sys", "/dev", "/etc/rancher", "/var/lib/rancher", "/var/lib/kubelet", "/var/lib/containerd")
+# System folders of the engine's host: refused as a mount source, inside one, or as a folder that holds
+# one (mounting /var would hand over /var/lib/docker with it). Writable /etc, /root, /usr, … are as
+# good as root on the host, and /mnt/wsl holds Rancher Desktop's WSL Docker socket on Windows.
+_NO_BIND = (
+    "/var/lib/docker", "/var/run", "/run", "/proc", "/sys", "/dev", "/etc", "/root", "/boot", "/usr", "/bin", "/sbin",
+    "/lib", "/lib32", "/lib64", "/libx32", "/mnt/wsl", "/etc/rancher", "/var/lib/rancher", "/var/lib/kubelet", "/var/lib/containerd",
+)
+RUN_LABEL = "pierside.mcp"  # on containers run_container created (not com.pierside.*: they stay shareable)
+
+
+def _bind_path(source: str) -> str:
+    return posixpath.normpath("/" + source.lstrip("/"))  # also folds //, /./ and /../
 
 
 def _bind_refused(source: str) -> bool:
     """Whether a host path may not be mounted: a system folder, anything inside one, or a folder that
-    contains one (mounting /var would hand over /var/lib/docker with it)."""
-    path = posixpath.normpath("/" + source.lstrip("/"))  # also folds //, /./ and /../
+    contains one."""
+    path = _bind_path(source)
     if path == "/" or "docker.sock" in path:
         return True
     return any(path == p or path.startswith(p + "/") or p.startswith(path + "/") for p in _NO_BIND)
+
+
+def _below(path: str, folder: str) -> bool:
+    """Strictly inside `folder`. The folder itself is safe to mount again: a container that mounts it
+    can't turn its own mount point into a link, only what is inside."""
+    return path != folder and (folder == "/" or path.startswith(folder.rstrip("/") + "/"))
+
+
+# Prints each given host path (as seen under /host) that has a symbolic link in it, with the link.
+_LINK_PROBE = 'set -f; for p; do q=""; IFS=/; for part in $p; do [ -n "$part" ] || continue; q="$q/$part"; if [ -L "/host$q" ]; then printf "%s\\t%s\\n" "$p" "$q"; break; fi; done; unset IFS; done'
+
+
+async def _check_binds(cx: Ctx, sources: list[str]) -> None:
+    """Refuse host paths that could lead somewhere else than they say. Docker follows symbolic links in a
+    bind source, so a link made in an allowed folder (e.g. /tmp/x -> /run) would hand over the Docker
+    socket. Refused: any source with a symbolic link in it (checked on the engine's host), and any source
+    below a folder that a container this connection can reach mounts writable (it could put a link there
+    between this check and the start)."""
+    if not sources:
+        return
+    writable: list[str] = []
+    for c in await cx.get("containers/json", all="1"):
+        if not (_shared(cx.profile, c) or RUN_LABEL in (c.get("Labels") or {})):
+            continue
+        writable += [m["Source"] for m in c.get("Mounts") or [] if m.get("Type") == "bind" and m.get("RW") and m.get("Source")]
+    for source in sources:
+        hit = next((w for w in writable if _below(source, _bind_path(w))), None)
+        if hit:
+            raise Denied(f"Mounting {source} isn't allowed: it lies in {hit}, which a container this connection can reach mounts writable")
+    try:
+        await cx.get(f"images/{HELPER_IMAGE}/json")
+    except aiodocker.DockerError as e:
+        if e.status != 404:
+            raise
+        await cx.docker.images.pull(HELPER_IMAGE)
+    config = {
+        "Image": HELPER_IMAGE,
+        "Cmd": ["sleep", "60"],
+        "Labels": {HELPER_LABEL: "mcp"},
+        "NetworkDisabled": True,
+        "HostConfig": {"AutoRemove": True, "NetworkMode": "none", "Mounts": [{"Type": "bind", "Source": "/", "Target": "/host", "ReadOnly": True}]},
+    }
+    cid = (await cx.post("containers/create", config))["Id"]
+    try:
+        await cx.post(f"containers/{cid}/start")
+        code, out, err = await _exec(cx, cid, ["sh", "-c", _LINK_PROBE, "sh", *sources])
+    finally:
+        try:
+            await cx.docker._query_json(f"containers/{cid}", method="DELETE", params={"force": "true"})
+        except aiodocker.DockerError:
+            pass
+    if code != 0:
+        raise ToolError(f"Couldn't check the mount paths on the engine's host ({err.strip() or code}); nothing was started")
+    for line in out.splitlines():
+        source, _, link = line.partition("\t")
+        if source:
+            raise Denied(f"Mounting {source} isn't allowed: {link} is a symbolic link on the engine's host; give the real path (it must be allowed too)")
 
 
 @tool(
@@ -908,7 +979,8 @@ def _bind_refused(source: str) -> bool:
     "Create and start a new container from an image (like `docker run -d`). The image must already be on the engine (see pull_image). "
     "Host paths in `volumes` are paths on the machine the engine runs on, not necessarily the user's desktop: for Rancher Desktop on Windows that is "
     "its Linux VM, where the Windows drives are usually found under /mnt/<drive letter>/. They are not limited by the connection's allowed file paths "
-    "(those apply to the file tools); the Docker socket, system folders (/, /var/run, /run, /proc, /sys, /dev, /var/lib/docker) and folders that contain them (/var, /var/lib) are refused unless the user switched that on for the connection (see connection_info). "
+    "(those apply to the file tools); the Docker socket, system folders (/, /etc, /root, /usr, /boot, /bin, /sbin, /lib, /var/run, /run, /proc, /sys, /dev, /var/lib/docker, /mnt/wsl) and folders that contain them (/var, /var/lib, /mnt) are refused, "
+    "and so are paths with a symbolic link in them and paths inside a folder that a container you can reach mounts writable, unless the user switched host mounts on for the connection (see connection_info). "
     "`network` is a network's name or `none`; the host's network and another container's (`container:…`) are refused.",
     {
         "image": {"type": "string"},
@@ -928,7 +1000,8 @@ async def run_container(cx: Ctx, args: dict) -> str:
         raise ToolError("Not a valid container name")
     if not _name_in_scope(cx.profile, name):
         raise Denied(f"A container named {name!r} wouldn't be shared with this connection; choose a name it covers ({', '.join(cx.profile.containers) or 'no name patterns are set'})")
-    config: dict = {"Image": image, "Env": [], "ExposedPorts": {}, "HostConfig": {"PortBindings": {}, "Binds": []}}
+    config: dict = {"Image": image, "Env": [], "ExposedPorts": {}, "Labels": {RUN_LABEL: "run"}, "HostConfig": {"PortBindings": {}, "Binds": []}}
+    host_sources: list[str] = []
     if args.get("command"):
         config["Cmd"] = shlex.split(_text(args, "command"))
     env = args.get("env") or {}
@@ -948,8 +1021,10 @@ async def run_container(cx: Ctx, args: dict) -> str:
             raise ToolError(f"Bad volume {spec!r}; use name:/path or /host/path:/path, optionally :ro")
         source = parts[0]
         if source.startswith("/"):
-            if _bind_refused(source) and not cx.profile.host_mounts():
-                raise Denied(f"Mounting {source} isn't allowed: it is, holds or lies inside a system folder, which would give the container control over Docker or the host")
+            if not cx.profile.host_mounts():
+                if _bind_refused(source):
+                    raise Denied(f"Mounting {source} isn't allowed: it is, holds or lies inside a system folder, which would give the container control over Docker or the host")
+                host_sources.append(_bind_path(source))
         elif not _NAME.fullmatch(source):
             raise ToolError(f"Bad volume {spec!r}; the source is a volume name or an absolute host path")
         else:
@@ -965,6 +1040,7 @@ async def run_container(cx: Ctx, args: dict) -> str:
                 # It may hold the data of a container this connection doesn't cover.
                 raise Denied(f"Mounting the existing volume {source} needs the See volumes permission; a new volume name works without it")
         config["HostConfig"]["Binds"].append(str(spec))
+    await _check_binds(cx, list(dict.fromkeys(host_sources)))
     if args.get("restart"):
         if args["restart"] not in ("no", "always", "unless-stopped", "on-failure"):
             raise ToolError("Unknown restart policy")
@@ -2047,6 +2123,46 @@ async def _prune_plan(cx: Ctx, what, everything: bool) -> list[tuple[str, str]]:
     raise ToolError("what must be containers, images, volumes, networks or build_cache")
 
 
+# Images of Kubernetes (k3s) and of Rancher Desktop itself (its extension proxy), kept like extension images.
+_SYSTEM_IMAGES = ("rancher/mirrored-", "rancher/klipper-", "rancher/k3s", "rancher/local-path-provisioner", "registry.k8s.io/", "ghcr.io/rancher-sandbox/")
+
+
+async def _image_prune_plan(cx: Ctx, everything: bool) -> list[dict]:
+    """Unused images a prune removes: {"kind": delete | untag | protected, "id", "tags", "remove", "kept", "size"}.
+    Without `everything` only untagged images. Images of extensions and Kubernetes are never removed."""
+    images, containers = await asyncio.gather(cx.get("images/json"), cx.get("containers/json", all="1"))
+    used = {c.get("ImageID") for c in containers}
+    # The engine also keeps a tag that a container was started by, even after the tag moved to
+    # another image (tested: a prune left such a tag and only removed the image's other tags).
+    # The container list shows the image id instead of that name once the tag has moved, so read
+    # the name the container was created with from its configuration.
+    refs = set()
+    for c in containers:
+        ref = c.get("Image") or ""
+        if ref.startswith("sha256:") or re.fullmatch(r"[0-9a-f]{12,64}", ref):
+            ref = ((await cx.get(f"containers/{c['Id']}/json")).get("Config") or {}).get("Image") or ""
+        refs.add(ref)
+    refs |= {r + ":latest" for r in refs if r and ":" not in r.rsplit("/", 1)[-1] and "@" not in r}
+    plan = []
+    for i in images:
+        if i["Id"] in used:
+            continue
+        short = i["Id"].removeprefix("sha256:")[:12]
+        tags = [t for t in i.get("RepoTags") or [] if t != "<none>:<none>"]
+        entry = {"id": short, "fullId": i["Id"], "tags": tags, "remove": [], "kept": [], "size": i.get("Size")}
+        if tags and not everything:
+            continue
+        if _protected_labels(i.get("Labels"), "") or any(t.removeprefix("docker.io/").startswith(_SYSTEM_IMAGES) for t in tags):
+            plan.append({**entry, "kind": "protected"})
+            continue
+        kept = [t for t in tags if t in refs]
+        if not kept:
+            plan.append({**entry, "kind": "delete", "remove": tags or [i["Id"]]})
+        elif len(kept) < len(tags):
+            plan.append({**entry, "kind": "untag", "remove": [t for t in tags if t not in kept], "kept": kept})
+    return plan
+
+
 @tool(
     "prune_preview",
     "cleanup",
@@ -2058,36 +2174,15 @@ async def _prune_plan(cx: Ctx, what, everything: bool) -> list[tuple[str, str]]:
 async def prune_preview(cx: Ctx, args: dict) -> str:
     what, everything = args.get("what"), bool(args.get("all"))
     if what == "images":
-        images, containers = await asyncio.gather(cx.get("images/json"), cx.get("containers/json", all="1"))
-        used = {c.get("ImageID") for c in containers}
-        # The engine also keeps a tag that a container was started by, even after the tag moved to
-        # another image (tested: a prune left such a tag and only removed the image's other tags).
-        # The container list shows the image id instead of that name once the tag has moved, so read
-        # the name the container was created with from its configuration.
-        refs = set()
-        for c in containers:
-            ref = c.get("Image") or ""
-            if ref.startswith("sha256:") or re.fullmatch(r"[0-9a-f]{12,64}", ref):
-                ref = ((await cx.get(f"containers/{c['Id']}/json")).get("Config") or {}).get("Image") or ""
-            refs.add(ref)
-        refs |= {r + ":latest" for r in refs if r and ":" not in r.rsplit("/", 1)[-1] and "@" not in r}
-        deleted, untagged = [], []
-        for i in images:
-            if i["Id"] in used:
-                continue
-            short = i["Id"].removeprefix("sha256:")[:12]
-            tags = [t for t in i.get("RepoTags") or [] if t != "<none>:<none>"]
-            if not tags:
-                deleted.append({"image": short, "sizeBytes": i.get("Size")})
-            elif everything:
-                kept = [t for t in tags if t in refs]
-                if not kept:
-                    deleted.append({"image": ", ".join(tags), "id": short, "sizeBytes": i.get("Size")})
-                elif len(kept) < len(tags):
-                    untagged.append({"id": short, "tagsRemoved": [t for t in tags if t not in kept], "tagsKept": kept, "reason": "a container was started by the kept tag"})
+        plan = await _image_prune_plan(cx, everything)
+        deleted = [{"image": ", ".join(e["tags"]) or e["id"], **({"id": e["id"]} if e["tags"] else {}), "sizeBytes": e["size"]} for e in plan if e["kind"] == "delete"]
+        untagged = [{"id": e["id"], "tagsRemoved": e["remove"], "tagsKept": e["kept"], "reason": "a container was started by the kept tag"} for e in plan if e["kind"] == "untag"]
         out = {"wouldDelete": deleted, "note": "Sizes overlap where images share layers; the space actually freed can be less."}
         if untagged:
             out["wouldOnlyUntag"] = untagged
+        protected = [", ".join(e["tags"]) or e["id"] for e in plan if e["kind"] == "protected"]
+        if protected:
+            out["kept"] = {"images": protected, "reason": "they belong to Rancher Desktop extensions or Kubernetes"}
         return _json(out)
     if what == "build_cache":
         from app.routers.system import summarise_df
@@ -2108,10 +2203,30 @@ async def prune_preview(cx: Ctx, args: dict) -> str:
 )
 async def prune(cx: Ctx, args: dict) -> str:
     what, everything = args.get("what"), bool(args.get("all"))
-    if what == "images":
-        result = await cx.post("images/prune", filters=json.dumps({"dangling": ["false" if everything else "true"]}))
+    if what == "images" and not everything:
+        # Untagged images only: extension and Kubernetes images are always tagged, so the engine's own prune is safe.
+        result = await cx.post("images/prune", filters=json.dumps({"dangling": ["true"]}))
         gone = [d.get("Untagged") or d.get("Deleted", "")[:19] for d in result.get("ImagesDeleted") or []]
         return _json({"deleted": len(result.get("ImagesDeleted") or []), "reclaimedBytes": result.get("SpaceReclaimed", 0), "items": gone[:100]})
+    if what == "images":
+        # Image by image, so that images of extensions and Kubernetes stay (the engine's prune would take them).
+        done, failed, reclaimed = [], [], 0
+        plan = await _image_prune_plan(cx, True)
+        for e in plan:
+            if e["kind"] not in ("delete", "untag"):
+                continue
+            try:
+                for ref in e["remove"]:  # the last tag going removes the image (never forced)
+                    await cx.docker._query_json(f"images/{ref}", method="DELETE")
+                done.append(", ".join(e["remove"]) if e["tags"] else e["id"])
+                reclaimed += (e["size"] or 0) if e["kind"] == "delete" else 0
+            except aiodocker.DockerError as err:
+                failed.append(f"{', '.join(e['tags']) or e['id']} ({err.message})")
+        out = {"deleted": done, "notDeleted": failed, "reclaimedBytesAtMost": reclaimed}
+        protected = [", ".join(e["tags"]) or e["id"] for e in plan if e["kind"] == "protected"]
+        if protected:
+            out["kept"] = protected
+        return _json(out)
     if what == "build_cache":
         result = await cx.post("build/prune", all="true")
         return _json({"deleted": len(result.get("CachesDeleted") or []), "reclaimedBytes": result.get("SpaceReclaimed", 0)})

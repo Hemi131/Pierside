@@ -74,12 +74,12 @@ async def container_file(cid: str, path: str):
 
 @router.get("/{cid}/download")
 async def container_download(cid: str, path: str):
-    await _running_with_shell(cid)
+    size = await _fs_call(cid, lambda: fsbrowse.file_size(cid, "/", path))
     filename = posixpath.basename(path) or "download"
     return StreamingResponse(
-        fsbrowse.stream_file(cid, "/", path),
+        fsbrowse.at_most(fsbrowse.stream_file(cid, "/", path), size),
         media_type="application/octet-stream",
-        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}"},
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}", "Content-Length": str(size)},
     )
 
 

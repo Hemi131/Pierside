@@ -6,6 +6,8 @@ import { api, openExternal } from "../api/ddclient";
 import { copyText } from "../utils/format";
 import { MONO } from "../theme";
 import { useFeedback } from "./Feedback";
+import { usePersistentState } from "../hooks/usePersistentState";
+import { allowDesktopAlerts, DESKTOP_ALERTS_PREF, desktopAlertsSupported, showDesktopAlert } from "./EngineAlerts";
 
 interface VersionInfo {
   version: string;
@@ -25,6 +27,16 @@ export function VersionFooter() {
   const { toast } = useFeedback();
   const [info, setInfo] = useState<VersionInfo | null>(null);
   const [open, setOpen] = useState(false);
+  const [desktopAlerts, setDesktopAlerts] = usePersistentState(DESKTOP_ALERTS_PREF, false);
+  const switchDesktopAlerts = async (on: boolean) => {
+    if (!on) return setDesktopAlerts(false);
+    if (!(await allowDesktopAlerts())) {
+      toast("warning", "Notifications are blocked for Pierside here. Allow them in the browser's or system's settings and try again.");
+      return;
+    }
+    setDesktopAlerts(true);
+    if (!showDesktopAlert("Pierside", "This is how a container problem will be announced.")) toast("warning", "Pierside may show notifications, but this window didn't display one.");
+  };
 
   useEffect(() => {
     const load = () =>
@@ -103,6 +115,21 @@ export function VersionFooter() {
                   <Typography>Check for new versions</Typography>
                   <Typography variant="body2" color="text.secondary">
                     Once a day Pierside asks GitHub for the newest release number. Nothing about this installation is sent.
+                  </Typography>
+                </>
+              }
+            />
+          )}
+          {desktopAlertsSupported() && (
+            <FormControlLabel
+              sx={{ mt: 2, alignItems: "flex-start" }}
+              control={<Switch size="small" checked={desktopAlerts} onChange={(e) => void switchDesktopAlerts(e.target.checked)} sx={{ mt: 0.25 }} />}
+              label={
+                <>
+                  <Typography>Desktop notifications for container problems</Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    When a container runs out of memory, turns unhealthy or keeps restarting, or a Swarm task keeps failing, and Pierside is open but not in front. It watches the engine
+                    that is active.
                   </Typography>
                 </>
               }

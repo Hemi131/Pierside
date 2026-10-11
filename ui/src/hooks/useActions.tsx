@@ -64,40 +64,43 @@ export function useActions() {
     async (key: string, label: string, fn: () => Promise<unknown>, success?: string) => {
       const attempt = async (): Promise<boolean> => {
         setPending(key, label);
+        let failure: unknown;
         try {
           await fn();
           if (success) toast("success", success);
           return true;
         } catch (e) {
-          setPending(key, null);
-          const conflict = portConflictOf(e);
-          if (!conflict) {
-            toast("error", (e as Error).message || String(e));
-            return false;
-          }
-          // Start failed because another container publishes the same host port: offer to stop it.
-          const { holder, port } = conflict;
-          if (!holder) {
-            toast("error", `${(e as Error).message} Free the port or change the container's port mapping.`);
-            return false;
-          }
-          const target = conflict.container.name ? `"${conflict.container.name}"` : "the container";
-          const ok = await confirm({
-            title: `Port ${port} is already in use`,
-            message: `"${holder.name}"${holder.project ? ` (project ${holder.project})` : ""} is publishing port ${port}, so ${target} can't start. Stop "${holder.name}" and try again?`,
-            confirmLabel: `Stop ${holder.name} and start`,
-          });
-          if (!ok) return false;
-          try {
-            await api.post(`/containers/${holder.id}/stop`);
-          } catch (e2) {
-            toast("error", `Couldn't stop ${holder.name}: ${(e2 as Error).message}`);
-            return false;
-          }
-          return attempt();
+          failure = e;
         } finally {
           setPending(key, null);
         }
+        // Outside try/finally: a retry below sets the pending state again and keeps it until it ends.
+        const e = failure;
+        const conflict = portConflictOf(e);
+        if (!conflict) {
+          toast("error", (e as Error).message || String(e));
+          return false;
+        }
+        // Start failed because another container publishes the same host port: offer to stop it.
+        const { holder, port } = conflict;
+        if (!holder) {
+          toast("error", `${(e as Error).message} Free the port or change the container's port mapping.`);
+          return false;
+        }
+        const target = conflict.container.name ? `"${conflict.container.name}"` : "the container";
+        const ok = await confirm({
+          title: `Port ${port} is already in use`,
+          message: `"${holder.name}"${holder.project ? ` (project ${holder.project})` : ""} is publishing port ${port}, so ${target} can't start. Stop "${holder.name}" and try again?`,
+          confirmLabel: `Stop ${holder.name} and start`,
+        });
+        if (!ok) return false;
+        try {
+          await api.post(`/containers/${holder.id}/stop`);
+        } catch (e2) {
+          toast("error", `Couldn't stop ${holder.name}: ${(e2 as Error).message}`);
+          return false;
+        }
+        return attempt();
       };
       return attempt();
     },

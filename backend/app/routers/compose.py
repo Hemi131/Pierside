@@ -108,6 +108,9 @@ async def _run(job: dict, command: str) -> None:
         job["state"] = "done"
     except asyncio.CancelledError:
         job["state"] = "cancelled"
+        proc = job.get("proc")
+        if proc is not None:
+            proc.close()  # closes the channel, so docker compose doesn't run on unseen
         raise
     except Exception as e:
         job["lines"].append({"s": "stderr", "m": f"Pierside: {e}"})
@@ -152,6 +155,10 @@ async def run_cancel(jid: str):
         return {"cancelled": False}
     proc = job.get("proc")
     if proc is not None:
-        proc.terminate()  # closes the SSH channel; docker compose gets SIGHUP
+        try:
+            proc.terminate()  # an SSH signal request; sshd may ignore it, so the channel is closed too
+        except Exception:
+            pass
+        proc.close()
     job["task"].cancel()
     return {"cancelled": True}

@@ -4,6 +4,29 @@ Each release of Pierside, newest first. Install a specific one with `rdctl exten
 
 ## Unreleased
 
+## 1.1.0 - 2026-10-11
+
+- **Alerts:** restart loops are found more reliably. A container whose command keeps finishing cleanly and being restarted is now reported too (with different advice than a crashing one), stopping and starting a container by hand is no longer mistaken for a crash, and slow loops (Docker waits up to a minute between attempts) are no longer missed. New: a **Swarm service whose task keeps failing** is reported, on any node. See [docs/alerts.md](docs/alerts.md).
+- **Desktop notifications** for these alerts when Pierside is open but not in front; switch them on in the dialog behind the version number.
+- **Engines: At a glance.** The Engines page shows for every engine whether it can be reached, how many containers run and which need attention, without switching to it.
+- **Server disk: the usual places.** A list of where space usually goes on a server (Docker's data, container logs, the journal, package caches, temporary files, home folders), measured with one click.
+- File editor: typing in large files is faster.
+- Fixed: switching to the SSH engine that is already active (for example from a second window) broke its connection until you switched away and back.
+- **AI access, security:**
+  - New containers can no longer reach host system folders through a symbolic link: a host path with a link in it is refused, and so is a path inside a folder that a container the assistant can reach mounts writable. The list of refused system folders now also has `/etc`, `/root`, `/usr`, `/boot`, `/bin`, `/sbin`, `/lib` and, on Windows, Rancher Desktop's WSL socket folder.
+  - Answering an assistant's request for more access applies only to the request you saw: if the assistant changed its request meanwhile, nothing is granted and the new request is shown.
+  - Engine events no longer show Swarm service, secret and config names to a connection without the Swarm permission.
+  - `prune` of all unused images keeps the images of Rancher Desktop extensions and Kubernetes, as it promised.
+  - Asking for a wider file path or name pattern than a connection has (e.g. `/app/**` when it has `/app/*`) now reaches you instead of being answered "already allowed".
+- **Adding an SSH engine** shows the server's host-key fingerprint first; your password or key is sent only after you confirm it.
+- **Downloads** from volumes, containers and server files fail visibly if they are cut short, instead of saving a shorter file; long downloads and uploads through Pierside's helper containers are no longer interrupted after a minute.
+- **Logs:** lines are no longer dropped when a container writes to stdout and stderr at the same moment.
+- **Live views** (logs, shell, stats, pull progress, terminal) reconnect by themselves after Pierside's backend restarts, instead of staying disconnected until Pierside is reopened.
+- **Port forwards to SSH engines** follow a container that was recreated (new address or port), and go away when it is removed, instead of reaching whatever now has its old address.
+- **Server files:** uploading into, or downloading from, a place your SSH user can't access asks whether Docker may be used, instead of showing "[object Object]".
+- **Containers:** "Remove service" on a Swarm service asks first and reports the result.
+- Cancelling `docker compose` on an SSH engine stops it on the server; stopping Server disk stops its measurements there too.
+
 ## 1.0.0 - 2026-10-10
 
 Pierside 1.0: next to Docker itself, it now also works with the server behind an SSH engine.

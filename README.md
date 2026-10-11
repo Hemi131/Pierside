@@ -59,6 +59,7 @@ The `docker pull` matters: Rancher Desktop installs from the image already on yo
 - [Ports and forwarding](docs/ports.md)
 - [Files, volumes and the editor](docs/files-and-volumes.md)
 - [AI access (MCP server)](docs/ai-access.md)
+- [Alerts and notifications](docs/alerts.md)
 - [Troubleshooting](docs/troubleshooting.md)
 - [Building from source](docs/building.md)
 - [Changelog](CHANGELOG.md)

@@ -7,7 +7,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 
 from app.services import containers as containers_svc
-from app.services import helper, updates
+from app.services import updates
 from app.services.docker_client import query_json
 
 router = APIRouter(prefix="/system", tags=["system"])

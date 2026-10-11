@@ -1,4 +1,4 @@
-import { dd, extensionToken } from "./ddclient";
+import { ApiError, dd, extensionToken, fromDetail } from "./ddclient";
 import { getWsInfo } from "./ws";
 
 /** Fetch a binary endpoint straight from the backend's TCP port (vm.service can't carry binary) and save it. */
@@ -9,13 +9,17 @@ export async function downloadFromBackend(path: string, filename: string): Promi
   const sep = path.includes("?") ? "&" : "?";
   const res = await fetch(`http://localhost:${port}${path}${sep}token=${encodeURIComponent(token)}`);
   if (!res.ok) {
-    let detail = res.statusText;
+    // The same error as any other request (with the backend's structured detail, e.g. needsConsent),
+    // so the file browser can react to it (ask, then retry).
+    let detail: unknown = undefined;
     try {
-      detail = (await res.json()).detail ?? detail;
+      detail = (await res.json()).detail;
     } catch {
       /* not json */
     }
-    throw new Error(`Download failed: ${detail}`);
+    const err = detail !== undefined ? fromDetail(detail, res.status) : new ApiError(res.statusText || `HTTP ${res.status}`, res.status);
+    err.message = `Download failed: ${err.message}`;
+    throw err;
   }
   saveBlob(await res.blob(), filename);
 }
@@ -52,8 +56,8 @@ export async function uploadToBackend(path: string, file: Blob, onProgress?: (se
         /* not json */
       }
       if (xhr.status >= 200 && xhr.status < 300) return resolve(body);
-      const detail = body && typeof body === "object" && "detail" in body ? String((body as { detail: unknown }).detail) : xhr.statusText;
-      reject(new Error(detail || `Upload failed (${xhr.status})`));
+      if (body && typeof body === "object" && "detail" in body) return reject(fromDetail((body as { detail: unknown }).detail, xhr.status));
+      reject(new ApiError(xhr.statusText || `Upload failed (${xhr.status})`, xhr.status));
     };
     xhr.onerror = () => reject(new Error("Upload failed: the backend isn't reachable"));
     xhr.send(file);

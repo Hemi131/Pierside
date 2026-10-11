@@ -48,6 +48,7 @@ Being allowed to use Docker on a server is as good as being root there, and this
 **Server disk** in the bottom bar shows where the space on the server went. It only reads; nothing can be deleted from it.
 
 - At the top are the server's filesystems with how full they are. This is immediate.
+- Below them, **The usual places** lists where space usually goes on a server: Docker's data, container logs, the systemd journal, package caches, temporary files, home folders, limited to what exists on this server. **Measure these** measures them one after another; some come with a hint on how to shrink them. Click one to open it.
 - Click one to open it. Pierside lists the folder and then measures each subfolder, so the rows fill in one after another, largest first, each with a bar and its share. Click a folder to go deeper; the folder button at the right opens the same place in Server files.
 - Nothing is measured that you didn't open, and sizes you have seen are kept while the page is open, so going back up is instant. **Refresh** measures the current folder again.
 

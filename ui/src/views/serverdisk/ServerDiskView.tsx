@@ -74,6 +74,13 @@ interface Size {
   seconds?: number;
 }
 
+/** A place where disk space usually goes on a server (backend hostdisk.usual_places). */
+interface Place {
+  path: string;
+  label: string;
+  hint: string;
+}
+
 /** A folder's size: measured, on its way ("pending"), or failed. */
 type Measured = Size | "pending" | { error: string };
 
@@ -98,6 +105,7 @@ export function ServerDiskView({ path }: { path?: string }) {
   // Each visit of a folder is a "run"; answers of an older run are still kept, but it starts nothing new.
   const run = useRef(0);
   const [busy, setBusy] = useState(false);
+  const [places, setPlaces] = useState<Place[]>([]);
 
   const loadOverview = useCallback(() => {
     setError(null);
@@ -105,6 +113,10 @@ export function ServerDiskView({ path }: { path?: string }) {
       .get<Overview>("/hostdisk")
       .then(setOverview)
       .catch((e) => setError((e as Error).message));
+    api
+      .get<Place[]>("/hostdisk/places")
+      .then(setPlaces)
+      .catch(() => setPlaces([]));
   }, []);
 
   useEffect(() => {
@@ -176,6 +188,7 @@ export function ServerDiskView({ path }: { path?: string }) {
       setSizes((s) => Object.fromEntries(Object.entries(s).filter(([p]) => !again.includes(p))));
       known.current = Object.fromEntries(Object.entries(known.current).filter(([p]) => !again.includes(p)));
       if (path) void measure((entries ?? []).filter((e) => e.type === "dir").map((e) => join(path, e.name)));
+      else void measure(again);
     } catch (e) {
       toast("error", (e as Error).message);
     }
@@ -183,7 +196,15 @@ export function ServerDiskView({ path }: { path?: string }) {
 
   const refresh = () => {
     loadOverview();
-    if (!path || !entries) return;
+    if (!path) {
+      // On the overview: measure the usual places again, if they were measured.
+      const measured = places.map((x) => x.path).filter((x) => known.current[x]);
+      known.current = Object.fromEntries(Object.entries(known.current).filter(([x]) => !measured.includes(x)));
+      setSizes(known.current);
+      if (measured.length) void measure(measured);
+      return;
+    }
+    if (!entries) return;
     const here = entries.filter((e) => e.type === "dir").map((e) => join(path, e.name));
     known.current = Object.fromEntries(Object.entries(known.current).filter(([p]) => !here.includes(p)));
     setSizes(known.current);
@@ -211,7 +232,51 @@ export function ServerDiskView({ path }: { path?: string }) {
   const total = rows.reduce((sum, r) => sum + (r.bytes ?? 0), 0);
   const pending = rows.filter((r) => r.m === "pending").length;
   const here = rows.map((r) => r.m).filter(isSize);
-  const needsConsent = overview?.useDocker == null && !overview?.dockerProblem && here.some((m) => m.needsConsent);
+  const placeRows = places
+    .map((x, i) => ({ ...x, i, m: sizes[x.path] }))
+    .sort((a, b) => (isSize(b.m) ? (b.m.bytes ?? -1) : -2) - (isSize(a.m) ? (a.m.bytes ?? -1) : -2) || a.i - b.i);
+  const placesMeasured = placeRows.some((r) => r.m);
+  const largestPlace = Math.max(1, ...placeRows.map((r) => (isSize(r.m) ? (r.m.bytes ?? 0) : 0)));
+  const shownSizes = path ? here : placeRows.map((r) => r.m).filter(isSize);
+  const needsConsent = overview?.useDocker == null && !overview?.dockerProblem && shownSizes.some((m) => m.needsConsent);
+  const consentBanner = needsConsent && overview && (
+    <Alert
+      severity="info"
+      sx={{ borderRadius: 0 }}
+      action={
+        <Button color="inherit" size="small" onClick={() => void setUseDocker(true)}>
+          Use Docker on this server
+        </Button>
+      }
+    >
+      Your SSH user ({overview.user}) can't read everything here, so some sizes are too low. Because your account may use Docker on this server, Pierside can measure those folders through a
+      read-only helper container, as root.
+    </Alert>
+  );
+  const status = (m: Measured | undefined) => (
+    <>
+      {m && m !== "pending" && "error" in m && (
+        <Tooltip title={m.error}>
+          <Chip size="small" color="error" variant="outlined" label="Couldn't measure" />
+        </Tooltip>
+      )}
+      {isSize(m) && m.timedOut && (
+        <Tooltip title="Measuring was stopped after two minutes. Open the folder to measure its parts one by one.">
+          <Chip size="small" color="warning" variant="outlined" label={m.bytes == null ? "Too big to measure at once" : "Stopped early"} />
+        </Tooltip>
+      )}
+      {isSize(m) && m.partial && !m.timedOut && (
+        <Tooltip title={`Your SSH user (${overview?.user}) can't read all of it, so the real size is larger.${overview?.dockerProblem ? " " + overview.dockerProblem + "." : ""}`}>
+          <Chip size="small" color="warning" variant="outlined" label="Partly unreadable" />
+        </Tooltip>
+      )}
+      {isSize(m) && m.via === "docker" && !m.partial && (
+        <Tooltip title={`Measured through a read-only helper container, as root, because your SSH user (${overview?.user}) can't read all of it.`}>
+          <Chip size="small" variant="outlined" icon={<ViewInArOutlinedIcon />} label="Through Docker" />
+        </Tooltip>
+      )}
+    </>
+  );
   const crumbs = (path ?? "").split("/").filter(Boolean);
   const mountHere = overview?.filesystems.find((f) => f.mount === path);
 
@@ -277,26 +342,85 @@ export function ServerDiskView({ path }: { path?: string }) {
       )}
 
       {overview && !path && (
-        <Typography color="text.secondary">
-          Choose a filesystem to see what takes its space. Docker's own data (images, volumes, build cache) is broken down on the{" "}
-          <Link component="button" underline="hover" onClick={() => navigate("disk")} sx={{ verticalAlign: "baseline" }}>
-            Disk usage
-          </Link>{" "}
-          page.
-        </Typography>
+        <>
+          <Typography color="text.secondary" sx={{ mb: 2 }}>
+            Choose a filesystem above to go through its folders, or start with the places where space usually goes. Docker's own data (images, volumes, build cache) is broken down, with
+            clean-up, on the{" "}
+            <Link component="button" underline="hover" onClick={() => navigate("disk")} sx={{ verticalAlign: "baseline" }}>
+              Disk usage
+            </Link>{" "}
+            page.
+          </Typography>
+          {placeRows.length > 0 && (
+            <Paper variant="outlined" sx={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 160, overflow: "hidden" }}>
+              <Stack direction="row" alignItems="center" spacing={1} sx={{ px: 2, py: 1, borderBottom: 1, borderColor: "divider" }}>
+                <Typography sx={{ fontWeight: 600, flex: 1 }}>The usual places</Typography>
+                {busy ? (
+                  <Button size="small" startIcon={<StopIcon fontSize="small" />} onClick={stop}>
+                    Stop
+                  </Button>
+                ) : (
+                  <Tooltip describeChild title="Measures each of these folders, one after another, at low priority. Docker's data can take a while on a busy server.">
+                    <Button size="small" variant={placesMeasured ? "text" : "contained"} onClick={() => void measure(places.map((x) => x.path))}>
+                      {placesMeasured ? "Measure the rest" : "Measure these"}
+                    </Button>
+                  </Tooltip>
+                )}
+              </Stack>
+              {busy && <LinearProgress sx={{ height: 2 }} />}
+              {consentBanner}
+              <Box sx={{ flex: 1, overflow: "auto" }}>
+              <Table size="small">
+                <TableBody>
+                  {placeRows.map((r) => {
+                    const bytes = isSize(r.m) ? r.m.bytes : null;
+                    return (
+                      <TableRow key={r.path} hover onClick={() => go(r.path)} sx={{ cursor: "pointer" }}>
+                        <TableCell sx={{ width: "34%" }}>
+                          <Typography sx={{ fontWeight: 500 }}>{r.label}</Typography>
+                          <Typography variant="body2" color="text.secondary" sx={{ fontFamily: MONO, fontSize: 12, wordBreak: "break-all" }}>
+                            {r.path}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          {bytes != null && bytes > 0 && (
+                            <Box sx={{ height: 8, borderRadius: 4, bgcolor: "action.hover", overflow: "hidden", mb: r.hint ? 0.5 : 0 }}>
+                              <Box sx={{ height: "100%", width: `${Math.max(1, (bytes / largestPlace) * 100)}%`, bgcolor: "primary.main", borderRadius: 4 }} />
+                            </Box>
+                          )}
+                          {r.hint && (
+                            <Typography variant="body2" color="text.secondary">
+                              {r.hint}
+                            </Typography>
+                          )}
+                        </TableCell>
+                        <TableCell align="right" sx={{ width: 110, whiteSpace: "nowrap" }}>
+                          {r.m === "pending" ? <CircularProgress size={14} /> : bytes != null ? formatBytes(bytes) : r.m ? "—" : ""}
+                        </TableCell>
+                        <TableCell sx={{ width: 190, py: 0 }}>{status(r.m)}</TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+              </Box>
+            </Paper>
+          )}
+        </>
       )}
 
       {overview && path && (
         <Paper variant="outlined" sx={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 240, overflow: "hidden" }}>
           <Stack direction="row" alignItems="center" spacing={1} sx={{ px: 1, py: 0.5, borderBottom: 1, borderColor: "divider" }}>
-            <Tooltip title="Up one level">
-              <span>
-                <IconButton disabled={path === "/"} onClick={() => go(parent(path))} aria-label="Up one level">
-                  <ArrowUpwardIcon fontSize="small" />
-                </IconButton>
-              </span>
+            <Tooltip title={path === "/" ? "Back to the overview" : "Up one level"}>
+              <IconButton onClick={() => go(path === "/" ? null : parent(path))} aria-label={path === "/" ? "Back to the overview" : "Up one level"}>
+                <ArrowUpwardIcon fontSize="small" />
+              </IconButton>
             </Tooltip>
-            <Breadcrumbs sx={{ flex: 1, fontFamily: MONO, fontSize: 13 }} maxItems={8}>
+            <Breadcrumbs sx={{ flex: 1, fontFamily: MONO, fontSize: 13 }} maxItems={9}>
+              <Link component="button" underline="hover" onClick={() => go(null)} sx={{ fontSize: 13 }}>
+                Overview
+              </Link>
               <Link component="button" underline="hover" onClick={() => go("/")} aria-label="Root folder" sx={{ display: "flex", alignItems: "center" }}>
                 <FolderIcon sx={{ fontSize: 16 }} />
               </Link>
@@ -328,20 +452,7 @@ export function ServerDiskView({ path }: { path?: string }) {
             </Tooltip>
           </Stack>
           {busy && <LinearProgress sx={{ height: 2 }} />}
-          {needsConsent && (
-            <Alert
-              severity="info"
-              sx={{ borderRadius: 0 }}
-              action={
-                <Button color="inherit" size="small" onClick={() => void setUseDocker(true)}>
-                  Use Docker on this server
-                </Button>
-              }
-            >
-              Your SSH user ({overview.user}) can't read everything here, so some sizes are too low. Because your account may use Docker on this server, Pierside can measure those folders
-              through a read-only helper container, as root.
-            </Alert>
-          )}
+          {consentBanner}
           {listError && (
             <Alert severity="error" sx={{ borderRadius: 0 }}>
               {listError}
@@ -399,26 +510,7 @@ export function ServerDiskView({ path }: { path?: string }) {
                           {bytes != null && total > 0 ? `${((bytes / total) * 100).toFixed(bytes / total < 0.1 ? 1 : 0)}%` : ""}
                         </TableCell>
                         <TableCell sx={{ py: 0 }}>
-                          {m && m !== "pending" && "error" in m && (
-                            <Tooltip title={m.error}>
-                              <Chip size="small" color="error" variant="outlined" label="Couldn't measure" />
-                            </Tooltip>
-                          )}
-                          {isSize(m) && m.timedOut && (
-                            <Tooltip title="Measuring was stopped after two minutes. Open the folder to measure its parts one by one.">
-                              <Chip size="small" color="warning" variant="outlined" label={m.bytes == null ? "Too big to measure at once" : "Stopped early"} />
-                            </Tooltip>
-                          )}
-                          {isSize(m) && m.partial && !m.timedOut && (
-                            <Tooltip title={`Your SSH user (${overview.user}) can't read all of it, so the real size is larger.${overview.dockerProblem ? " " + overview.dockerProblem + "." : ""}`}>
-                              <Chip size="small" color="warning" variant="outlined" label="Partly unreadable" />
-                            </Tooltip>
-                          )}
-                          {isSize(m) && m.via === "docker" && !m.partial && (
-                            <Tooltip title={`Measured through a read-only helper container, as root, because your SSH user (${overview.user}) can't read all of it.`}>
-                              <Chip size="small" variant="outlined" icon={<ViewInArOutlinedIcon />} label="Through Docker" />
-                            </Tooltip>
-                          )}
+                          {status(m)}
                         </TableCell>
                       </TableRow>
                     );

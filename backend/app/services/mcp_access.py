@@ -118,12 +118,17 @@ class Profile:
         actions = [a for a in ACTIONS if a in (wanted.get("actions") or []) and not self.allows(a)]
         if actions:
             out["actions"] = actions
+        # A wanted entry is covered when it is in the list as it is, or names one thing (no wildcards)
+        # that the list matches. A wider pattern ("/app/**" against "/app/*") is not covered, even
+        # though its text happens to match.
         if not self.all_containers():
             for key in ("containers", "projects"):
-                new = [n for n in dict.fromkeys(wanted.get(key) or []) if not name_allowed(n, getattr(self, key))]
+                have = getattr(self, key)
+                new = [n for n in dict.fromkeys(wanted.get(key) or []) if n not in have and (_has_glob(n) or not name_allowed(n, have))]
                 if new:
                     out[key] = new
-        paths = [x for x in dict.fromkeys(wanted.get("filePaths") or []) if x not in self.file_patterns() and not path_allowed(x, self.file_patterns())]
+        patterns = self.file_patterns()
+        paths = [x for x in dict.fromkeys(wanted.get("filePaths") or []) if "/**" not in patterns and x not in patterns and (_has_glob(x) or not path_allowed(x, patterns))]
         if paths:
             out["filePaths"] = paths
         engine_ids = [e for e in dict.fromkeys(wanted.get("engines") or []) if e not in self.engine_ids()]
@@ -204,6 +209,10 @@ def _path_regex(pattern: str) -> re.Pattern:
         else:
             out, i = out + re.escape(pattern[i]), i + 1
     return re.compile(out)
+
+
+def _has_glob(pattern: str) -> bool:
+    return any(ch in pattern for ch in "*?[")
 
 
 def name_allowed(name: str, patterns: list[str]) -> bool:
@@ -424,6 +433,10 @@ def _notify(action: str) -> None:
     hub.broadcast({"type": "event", "event": {"type": "mcp", "action": action, "id": "", "name": ""}})
 
 
+class StaleQuestion(Exception):
+    """The question was replaced (or isn't the one answered): nothing was decided."""
+
+
 class Approvals:
     """Sessions the user allowed, and questions waiting for an answer in the UI (memory only)."""
 
@@ -476,11 +489,16 @@ class Approvals:
         self._pending.pop(req["id"], None)
         _notify("answered")
 
-    def decide(self, rid: str, decision: str) -> None:
+    def decide(self, rid: str, decision: str, created_at: float | None = None) -> None:
+        """Answer a question. `created_at` names the question the user saw: a session's access question
+        can be replaced by a newer one under the same id, and an answer must never apply to a question
+        the user hasn't seen (StaleQuestion)."""
         self._expire()
         req = self._pending.get(rid)
         if req is None:
             raise KeyError(rid)
+        if created_at is None or abs(req["createdAt"] - created_at) > 1e-6:
+            raise StaleQuestion(rid)
         allowed = {"call": ("deny", "allow"), "access": ("deny", "deny_pause", "session", "permanent")}.get(req["kind"], ("deny", "once", "always", *TRUST_SECONDS))
         if decision not in allowed:
             raise ValueError("Unknown answer")

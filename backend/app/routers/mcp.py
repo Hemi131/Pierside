@@ -26,7 +26,7 @@ from pydantic import BaseModel
 
 from app.services import mcp_tools
 from app.services.engines import LOCAL_ID, LOCAL_URL, EngineError, engines
-from app.services.mcp_access import ACTIONS, APPROVAL_WAIT_S, MAX_LOG_LINES, Profile, activity, approvals, begin, clients, profiles, record, session_code, waiting
+from app.services.mcp_access import ACTIONS, APPROVAL_WAIT_S, MAX_LOG_LINES, Profile, StaleQuestion, activity, approvals, begin, clients, profiles, record, session_code, waiting
 from app.services.updates import VERSION
 
 log = logging.getLogger("pierside.mcp")
@@ -320,14 +320,17 @@ async def list_requests():
 
 class Decision(BaseModel):
     decision: str  # session: deny | once | day | week | month | always; call: deny | allow
+    createdAt: float  # the question the user answered (see Approvals.decide)
 
 
 @admin.post("/requests/{rid}")
 async def answer_request(rid: str, body: Decision):
     try:
-        approvals.decide(rid, body.decision)
+        approvals.decide(rid, body.decision, body.createdAt)
     except KeyError:
         raise HTTPException(404, "This request is no longer waiting; the assistant will ask again")
+    except StaleQuestion:
+        raise HTTPException(409, "The assistant changed its request meanwhile, so nothing was decided. Check the new request.")
     except ValueError as e:
         raise HTTPException(400, str(e))
     return {"ok": True}

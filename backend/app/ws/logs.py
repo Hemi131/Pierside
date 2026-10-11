@@ -231,6 +231,7 @@ async def _follow_service(sid: str, tail: str, on_batch, label_for_task) -> None
     # A service stream interleaves its tasks with slightly out-of-order timestamps, so dedupe per
     # task (only relevant after a reopen) instead of against one global watermark.
     last_by_task: dict[str, int] = {}
+    seen_by_task: dict[str, int] = {}  # as of the last reopen: only those lines are duplicates
     first = True
     while True:
         try:
@@ -242,16 +243,17 @@ async def _follow_service(sid: str, tail: str, on_batch, label_for_task) -> None
         if first:
             params["tail"] = tail
         else:
+            seen_by_task = dict(last_by_task)
             since = max(max(last_by_task.values(), default=0) - 2_000_000_000, 0)
             params["since"] = f"{since // 1_000_000_000}.{since % 1_000_000_000:09d}"
         async for batch in raw_log_lines(sid, tty, params, path=f"services/{sid}/logs"):
             out = []
             for line in batch:
                 task = _split_details(line).get("com.docker.swarm.task.id", "")
-                if line["k"] and line["k"] <= last_by_task.get(task, 0):
+                if line["k"] and line["k"] <= seen_by_task.get(task, 0):
                     continue
                 if line["k"]:
-                    last_by_task[task] = line["k"]
+                    last_by_task[task] = max(line["k"], last_by_task.get(task, 0))
                 line["svc"] = await label_for_task(task)  # type: ignore[typeddict-unknown-key]
                 out.append(line)
             if out:

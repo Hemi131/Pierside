@@ -27,6 +27,11 @@ export function useSwarmActions(reload: () => void) {
     [toast, reload],
   );
 
+  const removeService = async (id: string, name: string) => {
+    const yes = await confirm({ title: "Remove service?", message: `"${name}" and all its tasks will be removed.`, confirmLabel: "Remove", destructive: true });
+    return yes && run(() => api.del(`/swarm/services/${enc(id)}`), `Service ${name} removed`);
+  };
+
   return {
     scale: (s: SwarmService, replicas: number) => run(() => api.post(`/swarm/services/${s.id}/scale`, { replicas }), `Scaling ${s.name} to ${replicas}`),
     restart: async (s: SwarmService) => {
@@ -41,10 +46,7 @@ export function useSwarmActions(reload: () => void) {
       const yes = await confirm({ title: "Roll back service?", message: `"${s.name}" will be reverted to its previous specification.`, confirmLabel: "Roll back" });
       return yes && run(() => api.post(`/swarm/services/${s.id}/rollback`), `Rolling back ${s.name}`);
     },
-    remove: async (s: SwarmService) => {
-      const yes = await confirm({ title: "Remove service?", message: `"${s.name}" and all its tasks will be removed.`, confirmLabel: "Remove", destructive: true });
-      return yes && run(() => api.del(`/swarm/services/${s.id}`), `Service ${s.name} removed`);
-    },
+    remove: (s: Pick<SwarmService, "id" | "name">) => removeService(s.id, s.name),
     removeStack: async (name: string) => {
       const yes = await confirm({
         title: "Remove stack?",

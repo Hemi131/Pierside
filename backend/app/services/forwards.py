@@ -25,10 +25,11 @@ import os
 import secrets
 import socket
 import time
+from urllib.parse import quote
 
 import aiodocker
 
-from app.services.engines import DATA_DIR, LOCAL_ID, LOCAL_URL, EngineError, engines, key_path, ssh_connect
+from app.services.engines import DATA_DIR, LOCAL_ID, LOCAL_URL, EngineError, docker_get_via, engines, key_path, ssh_connect
 
 log = logging.getLogger("pierside.forwards")
 
@@ -237,12 +238,22 @@ class Forwards:
         remote = f["remote"]
 
         async def handle(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+            host, port = remote["host"], remote["port"]
             try:
                 conn = await self._ssh_conn(remote["engineId"])
-                r2, w2 = await conn.open_connection(remote["host"], remote["port"])  # type: ignore[attr-defined]
+                # Where the container is now: a recreated container has a new IP (or published port),
+                # and its old IP may belong to another container by now.
+                target = await self._remote_target(conn, f)
+                if target is None:
+                    log.info("container of forward %s removed on the server: removing the forward", f["id"])
+                    writer.close()
+                    asyncio.ensure_future(self.remove(f["id"]))
+                    return
+                host, port = target
+                r2, w2 = await conn.open_connection(host, port)  # type: ignore[attr-defined]
                 self.status[f["id"]] = ""
             except Exception as e:
-                self.status[f["id"]] = f"Can't reach {remote['host']}:{remote['port']} on the server: {e}"
+                self.status[f["id"]] = f"Can't reach {host}:{port} on the server: {e}"
                 writer.close()
                 return
 
@@ -273,6 +284,29 @@ class Forwards:
             except OSError:
                 continue
         raise ForwardError("No free relay port")
+
+    async def _remote_target(self, conn, f: dict) -> tuple[str, int] | None:
+        """(host, port) to dial on the server for a remote forward, looked up now; None if the container is gone.
+        By id, else by name (Compose keeps the name when it recreates a container)."""
+        cfg = engines.registry.engines.get(f["remote"]["engineId"])
+        if cfg is None:
+            raise ForwardError("That SSH engine was removed")
+        info = None
+        for ref in dict.fromkeys([f["target"]["id"], f["target"]["name"]]):
+            status, body = await docker_get_via(conn, cfg.mode, cfg.socketPath, f"/containers/{quote(ref, safe='')}/json")
+            if status == 200 and isinstance(body, dict):
+                info = body
+                break
+            if status != 404:
+                raise ForwardError(f"the Docker API on the server answered {status}")
+        if info is None:
+            return None
+        if info["Id"] != f["target"]["id"]:
+            f["target"]["id"] = info["Id"]
+            self._save()
+        host, port = remote_endpoint(info, f["targetPort"])
+        f["remote"]["host"], f["remote"]["port"] = host, port
+        return host, port
 
     # ---- keeping container forwards current ------------------------------------------------------
     async def _watch(self) -> None:
@@ -322,18 +356,7 @@ class Forwards:
         cfg = engines.registry.engines.get(engine_id)
         if engine_id == LOCAL_ID or cfg is None:
             raise ForwardError("Remote forwards need an SSH engine")
-        # Published on the server? Then its port there; otherwise straight to the container's IP.
-        host, port = None, None
-        for b in ((container.get("NetworkSettings") or {}).get("Ports") or {}).get(f"{target_port}/tcp") or []:
-            if b.get("HostPort"):
-                host, port = "127.0.0.1", int(b["HostPort"])
-                break
-        if host is None:
-            nets = (container.get("NetworkSettings") or {}).get("Networks") or {}
-            ip = next((n.get("IPAddress") for n in nets.values() if n.get("IPAddress")), None)
-            if not ip:
-                raise ForwardError("The container has no IP address on the server (is it running?)")
-            host, port = ip, target_port
+        host, port = remote_endpoint(container, target_port)
         f = {
             "id": secrets.token_hex(6),
             "kind": "remote",
@@ -370,6 +393,18 @@ class Forwards:
         conn = self._ssh.pop(engine_id, None)
         if conn is not None:
             conn.close()  # type: ignore[attr-defined]
+
+
+def remote_endpoint(container: dict, target_port: int) -> tuple[str, int]:
+    """Where to reach a container's port on its server: the published port if there is one, else its IP."""
+    for b in ((container.get("NetworkSettings") or {}).get("Ports") or {}).get(f"{target_port}/tcp") or []:
+        if b.get("HostPort"):
+            return "127.0.0.1", int(b["HostPort"])
+    nets = (container.get("NetworkSettings") or {}).get("Networks") or {}
+    ip = next((n.get("IPAddress") for n in nets.values() if n.get("IPAddress")), None)
+    if not ip:
+        raise ForwardError("The container has no IP address on the server (is it running?)")
+    return ip, target_port
 
 
 forwards = Forwards()

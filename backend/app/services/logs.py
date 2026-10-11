@@ -105,6 +105,10 @@ async def follow_container_logs(
     resume from the last seen timestamp (deduplicated), so restarts don't break the view."""
     last_key = 0
     first = True
+    # After a reopen, lines up to `seen` came with the previous stream already. Within one stream nothing
+    # is dropped: stdout and stderr are timestamped separately, so their lines can arrive slightly out of
+    # timestamp order, and a "newer than the last line" filter would lose some of them.
+    seen = 0
     while True:
         info = await query_json(f"containers/{cid}/json")
         tty = bool((info.get("Config") or {}).get("Tty"))
@@ -115,11 +119,12 @@ async def follow_container_logs(
         else:
             # `since` is inclusive at 1 s granularity in practice; filter duplicates by key below.
             params["since"] = f"{last_key // 1_000_000_000}.{last_key % 1_000_000_000:09d}"
+            seen = last_key
         if on_status:
             await on_status("streaming" if running else "stopped")
         async for batch in raw_log_lines(cid, tty, params):
-            if not first or last_key:
-                batch = [l for l in batch if l["k"] > last_key or l["k"] == 0]
+            if seen:
+                batch = [l for l in batch if l["k"] > seen or l["k"] == 0]
             if batch:
                 last_key = max(last_key, max(l["k"] for l in batch))
                 yield batch

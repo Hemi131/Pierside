@@ -193,8 +193,9 @@ async def upload_file(name: str, request: Request, path: str, filename: str):
         raise HTTPException(411, "Content-Length is required")
     cid = await _writable(name)
     try:
-        owner = await fswrite.owner_of(cid, path, helper.MOUNT)
-        target = await fswrite.upload(cid, path, filename, int(size), request.stream(), root=helper.MOUNT, owner=owner)
+        async with helper.lease(cid):
+            owner = await fswrite.owner_of(cid, path, helper.MOUNT)
+            target = await fswrite.upload(cid, path, filename, int(size), request.stream(), root=helper.MOUNT, owner=owner)
     except fsbrowse.FsError as e:
         raise _fs_error(e)
     return {"path": target[len(helper.MOUNT) :] or "/"}
@@ -258,12 +259,13 @@ async def download_file(name: str, path: str):
     """Binary download; used directly over the TCP port (vm.service can't carry binary)."""
     cid = await helper.helper_for(name)
     try:
-        fsbrowse.confine(helper.MOUNT, path)
+        size = await fsbrowse.file_size(cid, helper.MOUNT, path)
     except fsbrowse.FsError as e:
         raise _fs_error(e)
     filename = posixpath.basename(path) or "download"
+    # The lease keeps the helper while the file streams; Content-Length makes a short stream an error.
     return StreamingResponse(
-        fsbrowse.stream_file(cid, helper.MOUNT, path),
+        fsbrowse.at_most(helper.leased_stream(cid, fsbrowse.stream_file(cid, helper.MOUNT, path)), size),
         media_type="application/octet-stream",
-        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}"},
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}", "Content-Length": str(size)},
     )

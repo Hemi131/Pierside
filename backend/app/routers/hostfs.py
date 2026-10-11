@@ -13,7 +13,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from app.services import hostfs
-from app.services.fsbrowse import FsError
+from app.services.fsbrowse import FsError, at_most
 
 router = APIRouter(prefix="/hostfs", tags=["hostfs"])
 
@@ -118,10 +118,11 @@ async def upload_file(request: Request, path: str, filename: str):
 @router.get("/download")
 async def download_file(path: str):
     """Binary download; used directly over the TCP port (vm.service can't carry binary)."""
-    await _do(hostfs.readable(path))
+    size = await _do(hostfs.readable(path))
     filename = posixpath.basename(path) or "download"
+    # Content-Length: a stream that stops short (a dropped connection) shows as a failed download.
     return StreamingResponse(
-        hostfs.download(path),
+        at_most(hostfs.download(path), size),
         media_type="application/octet-stream",
-        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}"},
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}", "Content-Length": str(size)},
     )

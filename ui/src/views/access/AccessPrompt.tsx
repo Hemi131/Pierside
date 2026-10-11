@@ -3,10 +3,10 @@
  * so the question appears wherever the user is in Pierside; the backend holds the assistant's call
  * meanwhile (backend/app/services/mcp_access.py, Approvals).
  */
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Alert, Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, Menu, MenuItem, Stack, Tooltip, Typography } from "@mui/material";
 import ArrowDropDownIcon from "@mui/icons-material/ArrowDropDown";
-import { api } from "../../api/ddclient";
+import { api, ApiError } from "../../api/ddclient";
 import { useFeedback } from "../../components/Feedback";
 import { useEngine } from "../../hooks/useEngine";
 import { MONO } from "../../theme";
@@ -31,24 +31,29 @@ export function AccessPrompt() {
   const [longer, setLonger] = useState<HTMLElement | null>(null);
   const answered = useRef(new Set<string>());
 
-  useEffect(() => {
-    let stop = false;
-    const load = () =>
+  const stopped = useRef(false);
+  const load = useCallback(
+    () =>
       api
         .get<AccessRequest[]>("/mcp-access/requests")
-        .then((r) => !stop && setRequests(r.filter((x) => !answered.current.has(questionKey(x)))))
-        .catch(() => undefined); // backend not reachable right now: nothing to ask
+        .then((r) => !stopped.current && setRequests(r.filter((x) => !answered.current.has(questionKey(x)))))
+        .catch(() => undefined), // backend not reachable right now: nothing to ask
+    [],
+  );
+
+  useEffect(() => {
+    stopped.current = false;
     void load();
     const timer = window.setInterval(() => void load(), POLL_MS);
     const off = onEvent((e) => {
       if (e.type === "mcp") void load();
     });
     return () => {
-      stop = true;
+      stopped.current = true;
       window.clearInterval(timer);
       off();
     };
-  }, [onEvent]);
+  }, [onEvent, load]);
 
   const req = requests[0];
   if (!req) return null;
@@ -56,14 +61,19 @@ export function AccessPrompt() {
   const answer = async (decision: "deny" | "deny_pause" | "allow" | "once" | "session" | "permanent" | Exclude<Trust, "none">) => {
     setLonger(null);
     setBusy(true);
+    let stale = false;
     try {
-      await api.post(`/mcp-access/requests/${encodeURIComponent(req.id)}`, { decision });
+      // createdAt names the question shown here: if the assistant replaced it meanwhile, the backend
+      // decides nothing (409) and the new question is shown instead.
+      await api.post(`/mcp-access/requests/${encodeURIComponent(req.id)}`, { decision, createdAt: req.createdAt });
     } catch (e) {
-      toast("info", (e as Error).message);
+      stale = e instanceof ApiError && e.status === 409;
+      toast(stale ? "warning" : "info", (e as Error).message);
     }
     answered.current.add(questionKey(req));
     setRequests((cur) => cur.filter((x) => questionKey(x) !== questionKey(req)));
     setBusy(false);
+    if (stale) void load();
   };
 
   const call = req.kind === "call";

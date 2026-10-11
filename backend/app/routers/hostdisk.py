@@ -35,6 +35,12 @@ async def overview():
     return await _do(build())
 
 
+@router.get("/places")
+async def usual_places():
+    """Where disk space usually goes on a server, limited to what exists on this one."""
+    return await _do(hostdisk.usual_places())
+
+
 @router.get("/size")
 async def folder_size(path: str):
     return await _do(hostdisk.size(path))

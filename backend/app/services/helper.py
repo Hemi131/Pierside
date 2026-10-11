@@ -11,6 +11,7 @@ import asyncio
 import logging
 import secrets
 import time
+from contextlib import asynccontextmanager
 
 import aiodocker
 
@@ -26,6 +27,49 @@ MOUNT = "/v"
 _helpers: dict[tuple[str, bool], tuple[str, float]] = {}  # (volume, writable) -> (container id, last used)
 _locks: dict[str, asyncio.Lock] = {}
 _reaper: asyncio.Task | None = None
+# Helpers in use by a request that outlives helper_for() (a download, an upload, a measurement):
+# container id -> what holds it. The reapers (here and in hostfs.py) leave them alone meanwhile.
+_leases: dict[str, list[str]] = {}
+
+
+def busy(cid: str, kind: str | None = None) -> bool:
+    """Whether a request is using this helper (of the given kind, if given)."""
+    held = _leases.get(cid) or []
+    return bool(held) if kind is None else kind in held
+
+
+def only_held_by(cid: str, kind: str) -> bool:
+    held = _leases.get(cid) or []
+    return bool(held) and all(k == kind for k in held)
+
+
+@asynccontextmanager
+async def lease(cid: str, kind: str = "transfer"):
+    """Keep a helper while a long request uses it."""
+    _leases.setdefault(cid, []).append(kind)
+    try:
+        yield cid
+    finally:
+        held = _leases.get(cid) or []
+        if kind in held:
+            held.remove(kind)
+        if not held:
+            _leases.pop(cid, None)
+        _touch(cid)
+
+
+def _touch(cid: str) -> None:
+    """Restart the idle clock of a helper (its last request just ended)."""
+    for key, (known, _last) in list(_helpers.items()):
+        if known == cid:
+            _helpers[key] = (cid, time.monotonic())
+
+
+async def leased_stream(cid: str, chunks):
+    """Yield from `chunks` while holding the helper."""
+    async with lease(cid):
+        async for chunk in chunks:
+            yield chunk
 
 
 async def _ensure_image() -> None:
@@ -97,7 +141,9 @@ async def _reap_loop() -> None:
         await asyncio.sleep(10)
         now = time.monotonic()
         for key, (cid, last) in list(_helpers.items()):
-            if now - last > HELPER_IDLE_S:
+            if busy(cid):
+                _helpers[key] = (cid, now)  # in use: its idle time starts when the request ends
+            elif now - last > HELPER_IDLE_S:
                 _helpers.pop(key, None)
                 await _remove(cid)
 

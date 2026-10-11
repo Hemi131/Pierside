@@ -6,7 +6,8 @@ Pierside can manage Docker on another machine through SSH. Nothing is installed 
 
 1. Open the engine switcher at the top of the sidebar and choose **Engines → Add SSH engine**.
 2. Enter the host, the user, and a private key (paste it) or a password.
-3. Pierside tests the connection and shows the server's host-key fingerprint. Confirm it, then save.
+3. **Check host key** shows the server's host-key fingerprint before anything is sent to the server. Compare it with the server's own (`ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` on the server) and confirm it.
+4. **Test connection** then logs in, only to a server with that key, and checks Docker. Save when it works.
 
 Switch engines from the same menu. Everything in Pierside (containers, images, volumes, logs, shell, files) then works on the selected engine.
 
@@ -21,6 +22,10 @@ Pierside reaches the Docker socket by SSH socket forwarding. If the server disal
 ## Colours
 
 Give an engine a colour (when adding it, or **Engines → Colour**). While that engine is active, Pierside is framed in the colour and shows a banner with the engine's name. A red frame for production makes it hard to delete the wrong thing.
+
+## At a glance
+
+The top of the **Engines** page has a card for every engine: whether it can be reached, how many containers run, and which need attention (restarting, unhealthy, dead, or exited with an error in the last hours), without switching to it. Hover a problem to see the containers' names; **Switch** makes that engine the active one. Opening the page asks each engine once, over a separate connection that is closed again when idle; the refresh button asks again.
 
 ## What differs on a remote engine
 

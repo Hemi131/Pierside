@@ -220,6 +220,18 @@ async def read_preview(cid: str | None, root: str, path: str, run: Runner | None
     return {"path": path, "size": size, "truncated": truncated, "binary": binary, "content": text}
 
 
+async def file_size(cid: str, root: str, path: str, run: Runner | None = None) -> int:
+    """Size of a regular file (for Content-Length, so a download that stops short shows as failed)."""
+    full = confine(root, path)
+    script = 'P="$1"; [ -f "$P" ] || ' + _MISSING_OR_DENIED + '; [ -r "$P" ] || { echo "permission denied" >&2; exit 3; }; stat -c %s "$P"'
+    code, out, err = await (run or (lambda cmd: _exec(cid, cmd)))(["sh", "-c", script, "sh", full, "", "not a regular file"])
+    if code == DENIED:
+        raise denied(path)
+    if code != 0 or not out.strip().isdigit():
+        raise FsError(err.decode(errors="replace").strip() or "Not a file", 404)
+    return int(out.strip())
+
+
 async def stream_file(cid: str, root: str, path: str) -> AsyncIterator[bytes]:
     full = confine(root, path)
     c = get_docker().containers.container(cid)
@@ -232,4 +244,16 @@ async def stream_file(cid: str, root: str, path: str) -> AsyncIterator[bytes]:
             yield msg.data
 
 
-__all__ = ["FsError", "list_dir", "read_preview", "stream_file", "confine", "aiodocker"]
+async def at_most(chunks: AsyncIterator[bytes], size: int) -> AsyncIterator[bytes]:
+    """The first `size` bytes of a stream. A download announces the file's size (Content-Length) before
+    reading it; a file that grows meanwhile (a log being written) would otherwise send more than
+    announced, which fails the whole download. A file that turns out shorter still fails, as it should."""
+    left = size
+    async for chunk in chunks:
+        if left <= 0:
+            break
+        yield chunk[:left]
+        left -= len(chunk)
+
+
+__all__ = ["FsError", "list_dir", "read_preview", "stream_file", "file_size", "at_most", "confine", "aiodocker"]

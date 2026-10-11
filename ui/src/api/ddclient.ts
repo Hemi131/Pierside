@@ -80,7 +80,7 @@ export class ApiError extends Error {
 }
 
 /** FastAPI `detail`: a string, a {message, ...} object, or a validation error list. */
-function fromDetail(detail: unknown, status?: number): ApiError {
+export function fromDetail(detail: unknown, status?: number): ApiError {
   if (detail && typeof detail === "object" && !Array.isArray(detail) && "message" in detail) {
     return new ApiError(String((detail as { message: unknown }).message), status, detail);
   }

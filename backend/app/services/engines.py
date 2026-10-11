@@ -143,7 +143,7 @@ def _client_keys(key_text: str | None, passphrase: str) -> list | None:
 
 
 async def ssh_connect(host: str, port: int, user: str, *, key_text: str | None, passphrase: str, password: str, host_key: str | None):
-    """host_key=None accepts any key (probe only); otherwise only the pinned key is accepted."""
+    """Only the pinned host key is accepted (host_key=None would accept any; nothing passes None)."""
     known_hosts: Any = None if host_key is None else ([asyncssh.import_public_key(host_key)], [], [])
     try:
         return await asyncio.wait_for(
@@ -194,6 +194,38 @@ async def _http_over(reader, writer, request: bytes) -> bytes:
     return out
 
 
+def _dechunk(body: bytes) -> bytes:
+    """Decode an HTTP chunked body."""
+    out, rest = b"", body
+    while rest:
+        size_line, _, rest = rest.partition(b"\r\n")
+        size = int(size_line.split(b";")[0].strip() or b"0", 16)
+        if size == 0:
+            break
+        out, rest = out + rest[:size], rest[size + 2 :]
+    return out
+
+
+async def docker_get_via(conn, mode: str, socket_path: str, path: str) -> tuple[int, object]:
+    """GET a Docker API path over an SSH connection: (status, parsed JSON body or None)."""
+    reader, writer = await _open_channel(conn, mode, socket_path)
+    try:
+        raw = await _http_over(reader, writer, f"GET {path} HTTP/1.1\r\nHost: docker\r\nConnection: close\r\n\r\n".encode())
+    finally:
+        writer.close()
+    head, _, body = raw.partition(b"\r\n\r\n")
+    try:
+        status = int(head.split(b"\r\n", 1)[0].split(b" ", 2)[1])
+    except (IndexError, ValueError):
+        raise EngineError("the Docker API on the server gave no answer")
+    if b"transfer-encoding: chunked" in head.lower():
+        body = _dechunk(body)
+    try:
+        return status, json.loads(body) if body.strip() else None
+    except ValueError:
+        return status, None
+
+
 _PERMISSION_HINT = "Permission denied on {path}. Add the SSH user to the 'docker' group (or use rootless Docker's socket)."
 
 
@@ -241,12 +273,30 @@ async def docker_version_via(conn, mode: str, socket_path: str) -> dict:
     return json.loads(body)
 
 
-async def probe(host: str, port: int, user: str, key_text: str | None, passphrase: str, password: str, socket_path: str, mode: str) -> dict:
-    """Connect without host-key pinning, report the host key and check Docker access."""
-    conn = await ssh_connect(host, port, user, key_text=key_text, passphrase=passphrase, password=password, host_key=None)
+async def server_host_key(host: str, port: int) -> dict:
+    """The server's host key, fetched without logging in, so the user can check it before any password
+    or key is sent (like ssh asking about an unknown host)."""
     try:
-        server_key = conn.get_server_host_key()
-        host_key = server_key.export_public_key().decode().strip() if server_key else ""
+        key = await asyncio.wait_for(asyncssh.get_server_host_key(host, port), CONNECT_TIMEOUT)
+    except asyncio.TimeoutError:
+        raise EngineError(f"Timed out connecting to {host}:{port}")
+    except (OSError, asyncssh.Error) as e:
+        raise EngineError(f"SSH connection to {host}:{port} failed: {e}")
+    if key is None:
+        raise EngineError(f"{host}:{port} sent no host key")
+    return {"hostKey": key.export_public_key().decode().strip(), "fingerprint": key.get_fingerprint()}
+
+
+async def probe(host: str, port: int, user: str, key_text: str | None, passphrase: str, password: str, socket_path: str, mode: str, host_key: str) -> dict:
+    """Log in with the host key the user confirmed (see server_host_key) and check Docker access."""
+    try:
+        pinned = asyncssh.import_public_key(host_key)
+    except (asyncssh.KeyImportError, ValueError):
+        raise EngineError("Check the server's host key first")
+    conn = await ssh_connect(host, port, user, key_text=key_text, passphrase=passphrase, password=password, host_key=host_key)
+    try:
+        server_key = conn.get_server_host_key() or pinned
+        host_key = server_key.export_public_key().decode().strip()
         tried: list[str] = []
         errors: list[str] = []
         for m in (["socket", "stdio"] if mode == "auto" else [mode]):
@@ -255,7 +305,7 @@ async def probe(host: str, port: int, user: str, key_text: str | None, passphras
                 version = await docker_version_via(conn, m, socket_path)
                 return {
                     "hostKey": host_key,
-                    "fingerprint": server_key.get_fingerprint() if server_key else None,
+                    "fingerprint": server_key.get_fingerprint(),
                     "mode": m,
                     "docker": {"version": version.get("Version"), "apiVersion": version.get("ApiVersion"), "os": version.get("Os"), "arch": version.get("Arch")},
                 }
@@ -429,6 +479,11 @@ class EngineManager:
         async with self.switching:
             old_tunnel = self.tunnel
             new_tunnel = None
+            if old_tunnel is not None and old_tunnel.cfg.id == engine_id:
+                # Switching to the engine that is active already (a reconnect): both tunnels would use
+                # the same socket file, and stopping the old one afterwards would delete the new one's.
+                await old_tunnel.stop()
+                self.tunnel = old_tunnel = None
             if engine_id != LOCAL_ID:
                 cfg = self.registry.engines[engine_id]
                 new_tunnel = Tunnel(cfg)

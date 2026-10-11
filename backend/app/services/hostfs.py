@@ -28,7 +28,7 @@ from app.services import fsbrowse, fswrite
 from app.services.docker_client import get_docker, query_json
 from app.services.engines import DATA_DIR, engines
 from app.services.fsbrowse import FsError
-from app.services.helper import HELPER_IMAGE, HELPER_LABEL, _ensure_image, _remove
+from app.services.helper import HELPER_IMAGE, HELPER_LABEL, _ensure_image, _remove, busy, lease
 
 log = logging.getLogger("pierside.hostfs")
 
@@ -197,6 +197,9 @@ async def _reap() -> None:
         await asyncio.sleep(10)
         now = time.monotonic()
         for key, (cid, last) in list(_helpers.items()):
+            if key[0] == engines.active_id and busy(cid):
+                _helpers[key] = (cid, now)  # a download, upload or measurement is using it
+                continue
             # Helpers on another engine than the active one can't be reached; they remove themselves.
             if now - last > HELPER_IDLE_S or key[0] != engines.active_id:
                 _helpers.pop(key, None)
@@ -370,8 +373,9 @@ async def upload(directory: str, name: str, size: int, body: AsyncIterator[bytes
     target = posixpath.join(directory, name)
     if via == "docker":
         inner = _inside(mounted, directory)
-        owner = await fswrite.owner_of(cid, inner, MOUNT)
-        await fswrite.upload(cid, inner, name, size, body, root=MOUNT, owner=owner)
+        async with lease(cid):
+            owner = await fswrite.owner_of(cid, inner, MOUNT)
+            await fswrite.upload(cid, inner, name, size, body, root=MOUNT, owner=owner)
         return {"path": target, "via": "docker"}
     conn = await engines.tunnel._connection()
     proc = await conn.create_process(shlex.join(["sh", "-c", 'cat > "$1"', "sh", target]), encoding=None)
@@ -395,8 +399,9 @@ async def download(path: str) -> AsyncIterator[bytes]:
     if code != 0:
         await _fallback(path)
         cid, mounted = await _helper(posixpath.dirname(path), False)
-        async for chunk in fsbrowse.stream_file(cid, MOUNT, _inside(mounted, path)):
-            yield chunk
+        async with lease(cid):
+            async for chunk in fsbrowse.stream_file(cid, MOUNT, _inside(mounted, path)):
+                yield chunk
         return
     conn = await engines.tunnel._connection()
     proc = await conn.create_process(shlex.join(["cat", "--", path]), encoding=None)
@@ -408,16 +413,17 @@ async def download(path: str) -> AsyncIterator[bytes]:
     await proc.wait()
 
 
-async def readable(path: str) -> None:
-    """Raise now (before a download starts streaming) if the file can't be read either way."""
+async def readable(path: str) -> int:
+    """Raise now (before a download starts streaming) if the file can't be read either way; else its size."""
     path = _norm(path)
-    code, _out, err = await ssh_run(["sh", "-c", 'P="$1"; [ -f "$P" ] || ' + fsbrowse._MISSING_OR_DENIED + '; [ -r "$P" ] || exit 3', "sh", path, "not a regular file"])
-    if code == 0:
-        return
-    if code != fsbrowse.DENIED:
-        raise FsError(err.decode("utf-8", "replace").strip() or "Not a file", 404)
+    try:
+        return await fsbrowse.file_size(None, "/", path, run=ssh_run)
+    except FsError as e:
+        if e.status != 403:
+            raise
     await _fallback(path)
-    _mountable(posixpath.dirname(path))
+    cid, mounted = await _helper(posixpath.dirname(path), False)
+    return await fsbrowse.file_size(cid, MOUNT, _inside(mounted, path))
 
 
 async def release_all() -> None:

@@ -171,6 +171,7 @@ export function CodeEditor({ path, language, value, readOnly, wrap, check = true
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
   const handlers = useRef({ onChange, onSave });
+  const emitted = useRef<string | null>(null); // the text last given to onChange
   handlers.current = { onChange, onSave };
   const parts = useRef({
     wrap: new Compartment(),
@@ -275,7 +276,11 @@ export function CodeEditor({ path, language, value, readOnly, wrap, check = true
           // copy work in the preview too; it just can't be changed.
           p.readOnly.of(locked(locks)),
           EditorView.updateListener.of((u) => {
-            if (u.docChanged) handlers.current.onChange?.(u.state.doc.toString());
+            if (u.docChanged && handlers.current.onChange) {
+              // Remember what was handed out, so that getting the same text back as `value` costs nothing.
+              emitted.current = u.state.doc.toString();
+              handlers.current.onChange(emitted.current);
+            }
           }),
         ],
       }),
@@ -291,7 +296,9 @@ export function CodeEditor({ path, language, value, readOnly, wrap, check = true
   // Content replaced from outside (file reloaded, edit cancelled): only when it actually differs.
   useEffect(() => {
     const v = view.current;
-    if (v && v.state.doc.toString() !== value) v.dispatch({ changes: { from: 0, to: v.state.doc.length, insert: value } });
+    if (!v || value === emitted.current) return; // our own edit coming back: nothing to compare
+    emitted.current = null;
+    if (v.state.doc.toString() !== value) v.dispatch({ changes: { from: 0, to: v.state.doc.length, insert: value } });
   }, [value]);
 
   useEffect(() => {

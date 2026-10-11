@@ -42,6 +42,7 @@ import { useFeedback } from "../../components/Feedback";
 import { MONO } from "../../theme";
 import { EngineColorPicker } from "../../components/EngineColor";
 import { activateEngine, EngineEntry, EngineList, updateEngine } from "./engineApi";
+import { EnginesOverview } from "./EnginesOverview";
 
 interface ProbeResult {
   hostKey: string;
@@ -68,6 +69,9 @@ function AddEngineDialog({ open, onClose, onAdded }: { open: boolean; onClose: (
   const { toast } = useFeedback();
   const [f, setF] = useState(EMPTY);
   const [auth, setAuth] = useState<"key" | "password">("key");
+  // Step 1: the server's host key (fetched without logging in); step 2, once the user trusts it: the
+  // connection test, which is the first time a password or key is sent, and only to that server.
+  const [hostKey, setHostKey] = useState<{ hostKey: string; fingerprint: string } | null>(null);
   const [probe, setProbe] = useState<ProbeResult | null>(null);
   const [trusted, setTrusted] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -78,7 +82,10 @@ function AddEngineDialog({ open, onClose, onAdded }: { open: boolean; onClose: (
   const set = (k: keyof typeof EMPTY) => (e: React.ChangeEvent<HTMLInputElement>) => {
     setF({ ...f, [k]: e.target.value });
     setProbe(null); // any change invalidates the previous test
-    setTrusted(false);
+    if (k === "host" || k === "port") {
+      setHostKey(null); // another server: check its key again
+      setTrusted(false);
+    }
   };
 
   const params = () => ({
@@ -94,12 +101,26 @@ function AddEngineDialog({ open, onClose, onAdded }: { open: boolean; onClose: (
     publicHost: f.publicHost.trim(),
   });
 
+  const checkKey = async () => {
+    setBusy(true);
+    setError(null);
+    setTrusted(false);
+    try {
+      setHostKey(await api.post<{ hostKey: string; fingerprint: string }>("/engines/host-key", { host: f.host.trim(), port: parseInt(f.port, 10) || 22 }));
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const test = async () => {
+    if (!hostKey || !trusted) return;
     setBusy(true);
     setError(null);
     setProbe(null);
     try {
-      setProbe(await api.post<ProbeResult>("/engines/probe", params()));
+      setProbe(await api.post<ProbeResult>("/engines/probe", { ...params(), hostKey: hostKey.hostKey }));
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -114,6 +135,7 @@ function AddEngineDialog({ open, onClose, onAdded }: { open: boolean; onClose: (
       const added = await api.post<{ id: string; name: string }>("/engines", { ...params(), hostKey: probe.hostKey, resolvedMode: probe.mode, color: f.color });
       toast("success", `Engine ${added.name} added`);
       setF(EMPTY);
+      setHostKey(null);
       setProbe(null);
       setTrusted(false);
       onAdded();
@@ -204,18 +226,18 @@ function AddEngineDialog({ open, onClose, onAdded }: { open: boolean; onClose: (
           </Box>
 
           {error && <Alert severity="error">{error}</Alert>}
-          {probe && (
-            <Alert severity="success" icon={<VerifiedUserOutlinedIcon />}>
-              <Typography variant="body1" sx={{ fontWeight: 500 }}>
-                Connected: Docker {probe.docker.version} ({probe.docker.os}/{probe.docker.arch}) via {probe.mode === "socket" ? "socket forwarding" : "docker dial-stdio"}
-              </Typography>
-              <Typography variant="body2" sx={{ mt: 1 }}>
-                Host key fingerprint:
-              </Typography>
-              <Typography sx={{ fontFamily: MONO, fontSize: 12, wordBreak: "break-all" }}>{probe.fingerprint}</Typography>
+          {hostKey && (
+            <Alert severity={probe ? "success" : "info"} icon={<VerifiedUserOutlinedIcon />}>
+              {probe && (
+                <Typography variant="body1" sx={{ fontWeight: 500, mb: 1 }}>
+                  Connected: Docker {probe.docker.version} ({probe.docker.os}/{probe.docker.arch}) via {probe.mode === "socket" ? "socket forwarding" : "docker dial-stdio"}
+                </Typography>
+              )}
+              <Typography variant="body2">Host key fingerprint{probe ? "" : " (nothing has been sent to the server yet)"}:</Typography>
+              <Typography sx={{ fontFamily: MONO, fontSize: 12, wordBreak: "break-all" }}>{hostKey.fingerprint}</Typography>
               <FormControlLabel
                 sx={{ mt: 1 }}
-                control={<Checkbox size="small" checked={trusted} onChange={(e) => setTrusted(e.target.checked)} />}
+                control={<Checkbox size="small" checked={trusted} disabled={!!probe} onChange={(e) => setTrusted(e.target.checked)} />}
                 label="I've verified this fingerprint and trust this host"
               />
             </Alert>
@@ -228,8 +250,12 @@ function AddEngineDialog({ open, onClose, onAdded }: { open: boolean; onClose: (
         </Button>
         <Box sx={{ flex: 1 }} />
         {busy && <CircularProgress size={18} />}
-        {!probe ? (
-          <Button variant="contained" onClick={() => void test()} disabled={!canTest || busy}>
+        {!hostKey ? (
+          <Button variant="contained" onClick={() => void checkKey()} disabled={!canTest || busy}>
+            Check host key
+          </Button>
+        ) : !probe ? (
+          <Button variant="contained" onClick={() => void test()} disabled={!canTest || !trusted || busy}>
             Test connection
           </Button>
         ) : (
@@ -377,6 +403,7 @@ export function EnginesView() {
           The active engine is unreachable: {data.error}
         </Alert>
       )}
+      {data && <EnginesOverview engines={data.engines} switching={switching} onSwitch={(id) => void activate(id)} />}
       <Paper variant="outlined">
         <Table size="small">
           <TableHead>

@@ -15,7 +15,6 @@ import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import ViewInArOutlinedIcon from "@mui/icons-material/ViewInArOutlined";
 import LayersIcon from "@mui/icons-material/Layers";
 import HubOutlinedIcon from "@mui/icons-material/HubOutlined";
-import { api } from "../../api/ddclient";
 import { useSwarmActions } from "../swarm/useSwarmActions";
 import type { Container, ContainerStats } from "../../api/types";
 import { CopyableId, PortLinks, StatusDot, stateColor } from "../../components/common";
@@ -252,7 +251,10 @@ export function ProjectRow({ g, expanded, onToggleExpand, checked, indeterminate
   const open = (tab?: string) => (swarm ? navigate(...swarmTarget, ...(tab ? [tab] : [])) : navigate("projects", g.name, ...(tab ? [tab] : [])));
   const removeSwarm = () => {
     if (isStack) void swarmActions.removeStack(g.name);
-    else void api.del(`/swarm/services/${g.containers[0]?.swarmServiceId}`).catch(() => undefined);
+    else {
+      const id = g.containers[0]?.swarmServiceId;
+      if (id) void swarmActions.remove({ id, name: g.containers[0]?.swarmService ?? g.name });
+    }
   };
   const lastStarted = g.containers.reduce<string | null>((m, c) => (c.startedAt && (!m || c.startedAt > m) ? c.startedAt : m), null);
 
