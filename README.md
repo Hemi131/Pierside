@@ -38,7 +38,7 @@ The `docker pull` matters: Rancher Desktop installs from the image already on yo
 ## What it does
 
 - **Containers:** live list grouped by Compose project, start/stop/restart/delete (single, project or bulk), port links, CPU usage, port-conflict hints, health checks and alerts for crashing or out-of-memory containers.
-- **Container details:** live logs with search, timestamps and download; inspect; bind mounts; an interactive shell; a debug shell for containers that have none; a file browser; live stats.
+- **Container details:** live logs with search, timestamps and download; inspect; bind mounts; an interactive shell with your own command palette; a debug shell for containers that have none; a file browser; live stats.
 - **Compose:** merged, colour-coded logs of all services; Up, Down, Pull and recreate, and View configuration with the common flags. Projects stay listed after `down`.
 - **Files:** browse, find by name, upload, edit, delete and change permissions, in containers and in volumes. The code editor has syntax highlighting, error checking for JSON, YAML and Compose files, a diff of your changes before saving, and VS Code shortcuts.
 - **Images:** pull with progress, run with options, inspect layers, prune, copy an image to another engine without a registry.

@@ -238,8 +238,8 @@ export function LogViewer({ path, params, prefix, plainPrefix, lineFilter, filte
     if (active) requestAnimationFrame(() => fit.current?.fit());
   }, [active]);
 
-  // Incoming lines.
-  const pendingSearchRefresh = useRef<number | undefined>();
+  // Incoming lines. Search highlights follow by themselves: the search addon looks again after each
+  // write without scrolling or moving the current match (calling findNext here jumped to the next one).
   const onLines = useCallback(
     (lines: LogLine[]) => {
       const b = buf.current;
@@ -254,16 +254,9 @@ export function LogViewer({ path, params, prefix, plainPrefix, lineFilter, filte
       if (visible.length && term.current) {
         term.current.write(visible.map(format).join("\r\n") + "\r\n");
         if (!settings.current.atBottom) setUnseen((n) => n + visible.length);
-        if (settings.current.query && pendingSearchRefresh.current === undefined) {
-          pendingSearchRefresh.current = window.setTimeout(() => {
-            pendingSearchRefresh.current = undefined;
-            const q = settings.current.query;
-            if (q) search.current?.findNext(q, { ...searchOpts, incremental: true });
-          }, 400);
-        }
       }
     },
-    [passes, format, searchOpts],
+    [passes, format],
   );
 
   const onReset = useCallback(() => {

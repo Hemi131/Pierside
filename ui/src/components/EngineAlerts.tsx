@@ -1,8 +1,10 @@
 /**
- * Shows the problems the backend finds in the active engine (services/alerts.py): a container killed
- * for running out of memory, one turning unhealthy, one in a restart loop, a Swarm service whose task
- * keeps failing. Always as a toast; also as a desktop notification when the user switched that on and
- * isn't looking at Pierside.
+ * Shows the problems the backend finds (services/alerts.py) in the active engine and in engines watched
+ * in the background (services/watch.py): a container killed for running out of memory, one turning
+ * unhealthy, one in a restart loop, a Swarm service whose task keeps failing, a watched engine that
+ * can't be reached (and is back). Always as a toast; also as a desktop notification when the user
+ * switched that on and isn't looking at Pierside. An alert about another engine than the active one
+ * names it, and its notification opens Engines at a glance.
  *
  * How a desktop notification is shown depends on where Pierside runs:
  *   - inside Rancher Desktop: through Rancher's own toast call (ddClient.desktopUI.toast), which its
@@ -31,7 +33,7 @@ export async function allowDesktopAlerts(): Promise<boolean> {
   return Notification.permission === "granted";
 }
 
-export function showDesktopAlert(title: string, body: string, onClick?: () => void, severity: "warning" | "error" = "warning"): boolean {
+export function showDesktopAlert(title: string, body: string, onClick?: () => void, severity: "success" | "warning" | "error" = "warning"): boolean {
   if (dd) {
     try {
       dd.desktopUI.toast[severity](`${title}: ${body}`);
@@ -59,27 +61,36 @@ const TITLES: Record<string, string> = {
   unhealthy: "Container unhealthy",
   loop: "Container keeps restarting",
   service: "Swarm service keeps failing",
+  "engine-down": "Engine can't be reached",
+  "engine-up": "Engine is back",
 };
 
 export function EngineAlerts() {
   const { onEvent, engine } = useEngine();
   const { toast } = useFeedback();
-  const engineName = engine?.engine?.name;
+  const activeId = engine?.engine?.id;
+  const activeName = engine?.engine?.name;
 
   useEffect(
     () =>
       onEvent((e) => {
         if (e.type !== "alert" || !e.detail) return;
-        toast(e.severity === "error" ? "error" : "warning", e.detail);
+        const elsewhere = !!e.engineId && e.engineId !== activeId;
+        const engineName = e.engineName ?? activeName;
+        const severity = e.severity === "error" ? "error" : e.severity === "info" ? "success" : "warning";
+        // The engine's own alerts (can't be reached / back) name it already.
+        toast(severity, elsewhere && !e.action.startsWith("engine-") ? `${engineName}: ${e.detail}` : e.detail);
         // In the separate window, on the desktop only when Pierside isn't in front: the toast is enough
         // otherwise. Inside Rancher Desktop always: its extension view keeps reporting itself as
         // focused and visible when another window is in front, so there is nothing to go by.
         if (readPref<boolean>(DESKTOP_ALERTS_PREF) && (dd || document.hidden || !document.hasFocus())) {
           const title = `${dd ? "Pierside: " : ""}${TITLES[e.action] ?? "Pierside"}${engineName ? ` · ${engineName}` : ""}`;
-          showDesktopAlert(title, e.detail, () => (e.serviceId ? navigate("swarm", "services", e.serviceId) : e.id ? navigate("containers", e.id, "logs") : undefined), e.severity === "error" ? "error" : "warning");
+          const open = () =>
+            elsewhere || (!e.id && !e.serviceId) ? navigate("glance") : e.serviceId ? navigate("swarm", "services", e.serviceId) : navigate("containers", e.id, "logs");
+          showDesktopAlert(title, e.detail, open, severity);
         }
       }),
-    [onEvent, toast, engineName],
+    [onEvent, toast, activeId, activeName],
   );
 
   return null;

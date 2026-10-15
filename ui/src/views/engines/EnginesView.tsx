@@ -42,7 +42,6 @@ import { useFeedback } from "../../components/Feedback";
 import { MONO } from "../../theme";
 import { EngineColorPicker } from "../../components/EngineColor";
 import { activateEngine, EngineEntry, EngineList, updateEngine } from "./engineApi";
-import { EnginesOverview } from "./EnginesOverview";
 
 interface ProbeResult {
   hostKey: string;
@@ -403,7 +402,6 @@ export function EnginesView() {
           The active engine is unreachable: {data.error}
         </Alert>
       )}
-      {data && <EnginesOverview engines={data.engines} switching={switching} onSwitch={(id) => void activate(id)} />}
       <Paper variant="outlined">
         <Table size="small">
           <TableHead>

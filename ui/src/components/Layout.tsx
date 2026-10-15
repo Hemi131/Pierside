@@ -3,6 +3,7 @@ import { Box, Button, Divider, List, ListItemButton, ListItemIcon, ListItemText,
 import ComputerIcon from "@mui/icons-material/Computer";
 import CloudOutlinedIcon from "@mui/icons-material/CloudOutlined";
 import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
+import SpaceDashboardOutlinedIcon from "@mui/icons-material/SpaceDashboardOutlined";
 import { api, inExtension, openExternal } from "../api/ddclient";
 import { usePersistentState } from "../hooks/usePersistentState";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
@@ -44,7 +45,8 @@ const SECTIONS = [
 // Project views live under the Containers section.
 const sectionOf = (route: string[]) => (route[0] === "projects" ? "containers" : route[0] || "containers");
 
-function EngineSwitcher({ collapsed }: { collapsed: boolean }) {
+/** The active engine (opens the engine menu), and under it, as its second line, Engines at a glance. */
+function EngineSwitcher({ collapsed, glance }: { collapsed: boolean; glance: boolean }) {
   const { engine } = useEngine();
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const [list, setList] = useState<EngineList | null>(null);
@@ -56,35 +58,51 @@ function EngineSwitcher({ collapsed }: { collapsed: boolean }) {
   };
   return (
     <>
-      <Tooltip title={collapsed ? `Engine: ${meta?.name ?? "Local"}` : ""} placement="right">
-        <ListItemButton
-          onClick={(e) => open(e.currentTarget)}
-          sx={{ flexGrow: 0, mx: 1, mb: 1, borderRadius: 1, border: 1, borderColor: "divider", py: 0.5, px: collapsed ? 1 : 2, justifyContent: collapsed ? "center" : undefined, position: "relative" }}
-          aria-label="Switch engine"
-        >
-          <ListItemIcon sx={{ minWidth: collapsed ? 0 : 32 }}>
-            {meta?.type === "ssh" ? <CloudOutlinedIcon fontSize="small" /> : <ComputerIcon fontSize="small" />}
-          </ListItemIcon>
-          {!collapsed && (
-            <ListItemText
-              primary={meta?.name ?? "Local"}
-              secondary={meta?.type === "ssh" ? engineSubtitle(meta.name, meta.target) : "Rancher Desktop"}
-              primaryTypographyProps={{ noWrap: true, fontSize: 12.5, fontWeight: 600 }}
-              secondaryTypographyProps={{ noWrap: true, fontSize: 11 }}
+      <Box sx={{ flexShrink: 0, mx: 1, mb: 1, borderRadius: 1, border: 1, borderColor: "divider", overflow: "hidden" }}>
+        <Tooltip title={collapsed ? `Engine: ${meta?.name ?? "Local"}` : ""} placement="right">
+          <ListItemButton
+            onClick={(e) => open(e.currentTarget)}
+            sx={{ flexGrow: 0, py: 0.5, px: collapsed ? 1 : 2, justifyContent: collapsed ? "center" : undefined, position: "relative" }}
+            aria-label="Switch engine"
+          >
+            <ListItemIcon sx={{ minWidth: collapsed ? 0 : 32 }}>
+              {meta?.type === "ssh" ? <CloudOutlinedIcon fontSize="small" /> : <ComputerIcon fontSize="small" />}
+            </ListItemIcon>
+            {!collapsed && (
+              <ListItemText
+                primary={meta?.name ?? "Local"}
+                secondary={meta?.type === "ssh" ? engineSubtitle(meta.name, meta.target) : "Rancher Desktop"}
+                primaryTypographyProps={{ noWrap: true, fontSize: 12.5, fontWeight: 600 }}
+                secondaryTypographyProps={{ noWrap: true, fontSize: 11 }}
+              />
+            )}
+            <Box
+              sx={{
+                width: 8,
+                height: 8,
+                borderRadius: "50%",
+                flexShrink: 0,
+                bgcolor: engine?.ok ? "success.main" : engine ? "error.main" : "warning.main",
+                ...(collapsed ? { position: "absolute", top: 4, right: 4 } : { ml: 0.5 }),
+              }}
             />
-          )}
-          <Box
-            sx={{
-              width: 8,
-              height: 8,
-              borderRadius: "50%",
-              flexShrink: 0,
-              bgcolor: engine?.ok ? "success.main" : engine ? "error.main" : "warning.main",
-              ...(collapsed ? { position: "absolute", top: 4, right: 4 } : { ml: 0.5 }),
-            }}
-          />
-        </ListItemButton>
-      </Tooltip>
+          </ListItemButton>
+        </Tooltip>
+        <Divider />
+        <Tooltip title={collapsed ? "Engines at a glance" : ""} placement="right">
+          <ListItemButton
+            selected={glance}
+            onClick={() => navigate("glance")}
+            sx={{ flexGrow: 0, py: 0.25, px: collapsed ? 1 : 2, justifyContent: collapsed ? "center" : undefined }}
+            aria-label="Engines at a glance"
+          >
+            <ListItemIcon sx={{ minWidth: collapsed ? 0 : 32 }}>
+              <SpaceDashboardOutlinedIcon fontSize="small" />
+            </ListItemIcon>
+            {!collapsed && <ListItemText primary="Engines at a glance" primaryTypographyProps={{ noWrap: true, fontSize: 12 }} />}
+          </ListItemButton>
+        </Tooltip>
+      </Box>
       <Menu anchorEl={anchor} open={!!anchor} onClose={() => setAnchor(null)}>
         {!list && <MenuItem disabled>Loading…</MenuItem>}
         {list?.engines.map((e) => (
@@ -187,7 +205,7 @@ function Sidebar({ route }: { route: string[] }) {
         overflow: "hidden",
       }}
     >
-      <EngineSwitcher collapsed={collapsed} />
+      <EngineSwitcher collapsed={collapsed} glance={active === "glance"} />
       <List dense disablePadding>
         {SECTIONS.map((s) => item(s.key, s.label, s.icon, () => navigate(s.key), s.key === active))}
       </List>

@@ -51,8 +51,9 @@ export function updateEngine(id: string, patch: { name?: string; color?: string 
 }
 
 /** Switch engines, then reload the UI so every view and socket starts clean on the new engine. */
-export async function activateEngine(id: string): Promise<void> {
+/** Switch engines and start over on `hash` (a page of the new engine). */
+export async function activateEngine(id: string, hash = "#/containers"): Promise<void> {
   await api.post(`/engines/${encodeURIComponent(id)}/activate`);
-  window.location.hash = "#/containers";
+  window.location.hash = hash;
   window.location.reload();
 }

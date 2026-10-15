@@ -243,7 +243,7 @@ export function ContainerDetail({ id, tab }: { id: string; tab?: string }) {
           logs: (visible) => <LogViewer path={`/ws/logs/container/${c.id}`} params={{ tail: "5000" }} downloadName={c.name} active={visible} />,
           inspect: () => <InspectTab id={c.id} stateKey={`${c.state}:${c.startedAt}`} />,
           mounts: () => <MountsTab c={c} />,
-          exec: (visible) => <ShellView containerId={c.id} running={c.state === "running"} active={visible} onStart={() => void containerAction(c, "start")} />,
+          exec: (visible) => <ShellView containerId={c.id} target={c} running={c.state === "running"} active={visible} onStart={() => void containerAction(c, "start")} />,
           files: () =>
             c.state === "running" ? (
               <FileBrowser key={c.startedAt ?? ""} fs={fs!} />

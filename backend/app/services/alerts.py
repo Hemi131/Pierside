@@ -10,6 +10,9 @@
 What tells a restart loop from the user stopping and starting a container: Docker reports a `kill`
 before the `die` of anything stopped, restarted or killed on purpose (docker stop / restart / kill,
 Compose, Pierside's own buttons, Swarm scaling down). A container that exits by itself has no `kill`.
+And Docker only restarts a container whose restart policy says so: one that keeps dying without
+such a policy is being started again by something else (a CI runner reusing its containers across
+a job's stages, a script), which is no loop. The caller looks that up (docker_restarts).
 Docker waits longer between restarts each time (up to a minute), hence the wide window.
 """
 
@@ -84,7 +87,8 @@ class Alerts:
                     )
                 else:
                     text = f'"{name}" keeps crashing: it exited {len(recent)} times {span} (exit code {code or "unknown"}) and Docker restarts it each time. Check its logs.'
-                return _alert("loop", "warning", name, cid, text)
+                # Not yet an alert: only if Docker itself is what keeps starting it (see docker_restarts).
+                return {"kind": "check-loop", "containerId": cid, "name": name, "exitCode": code, "alert": _alert("loop", "warning", name, cid, text)}
             if str(attrs.get("exitCode", "")) == "137":
                 # Killed, but not by anyone using Docker: perhaps the kernel, for using too much memory.
                 # Docker normally reports that with an `oom` event; where it doesn't, the caller can
@@ -126,6 +130,28 @@ class Alerts:
             text = f'Swarm service "{name}": task {label} keeps failing, {len(items)} times in the last {LOOP_WINDOW_S // 60} minutes ({why}). Swarm starts a new one each time. Check the service\'s tasks and logs.'
             out.append({**_alert("service", "warning", name, "", text), "serviceId": service_id})
         return out
+
+
+def docker_restarts(policy: str | None, exit_code: str) -> bool:
+    """Whether Docker restarts a container with this restart policy after this exit."""
+    if policy in ("always", "unless-stopped"):
+        return True
+    if policy == "on-failure":
+        return exit_code != "0"
+    return False  # "no" / none: whatever starts it again, it isn't Docker
+
+
+async def confirm(problem: dict, inspect, alerts: "Alerts") -> dict | None:
+    """Settle a check-oom / check-loop answer of on_event by looking at the container
+    (`inspect(cid)` -> its inspect JSON, from whichever engine it is on). The alert, or None."""
+    try:
+        info = await inspect(problem["containerId"])
+    except Exception:
+        return None  # removed already: whoever runs it cleans up, so not a container stuck restarting
+    if problem["kind"] == "check-oom":
+        return alerts.out_of_memory(problem["containerId"], problem["name"]) if (info.get("State") or {}).get("OOMKilled") else None
+    policy = ((info.get("HostConfig") or {}).get("RestartPolicy") or {}).get("Name")
+    return problem["alert"] if docker_restarts(policy, problem["exitCode"]) else None
 
 
 def _alert(kind: str, severity: str, name: str, cid: str, message: str) -> dict:

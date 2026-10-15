@@ -50,9 +50,10 @@ async def query_json(path: str, method: str = "GET", params: dict | None = None,
     return await get_docker()._query_json(path, **kwargs)
 
 
-async def stream_json_lines(path: str, params: dict | None = None, method: str = "GET") -> AsyncIterator[dict]:
-    """Iterate a newline-delimited JSON stream from the engine (events, stats, pull progress)."""
-    async with get_docker()._query(path, method=method, params=params, timeout=STREAM_TIMEOUT) as resp:
+async def stream_json_lines(path: str, params: dict | None = None, method: str = "GET", docker: aiodocker.Docker | None = None) -> AsyncIterator[dict]:
+    """Iterate a newline-delimited JSON stream from the engine (events, stats, pull progress); the
+    active engine unless another engine's client is given."""
+    async with (docker or get_docker())._query(path, method=method, params=params, timeout=STREAM_TIMEOUT) as resp:
         buf = b""
         async for chunk in resp.content.iter_any():
             buf += chunk

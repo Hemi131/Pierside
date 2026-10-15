@@ -15,7 +15,7 @@ import time
 from typing import Any
 
 from app.services import containers as containers_svc
-from app.services.alerts import _timestamp, alerts
+from app.services.alerts import _timestamp, alerts, confirm
 from app.services.composereg import registry as composereg
 from app.services.docker_client import get_docker, query_json, stream_json_lines
 from app.services.engines import engines
@@ -174,8 +174,8 @@ class EngineHub:
         if action in _IGNORED_ACTIONS:
             return
         problem = alerts.on_event(ev)
-        if problem and problem["kind"] == "check-oom":
-            asyncio.ensure_future(self._check_oom(problem["containerId"], problem["name"]))
+        if problem and problem["kind"] in ("check-oom", "check-loop"):
+            asyncio.ensure_future(self._confirm(problem))
         elif problem:
             self._alert(problem)
         if etype == "container":
@@ -200,32 +200,17 @@ class EngineHub:
             }
         )
 
-    async def _check_oom(self, cid: str, name: str) -> None:
-        try:
-            info = await query_json(f"containers/{cid}/json")
-        except Exception:
-            return  # gone already
-        if (info.get("State") or {}).get("OOMKilled"):
-            problem = alerts.out_of_memory(cid, name)
-            if problem:
-                self._alert(problem)
+    async def _confirm(self, problem: dict) -> None:
+        alert = await confirm(problem, lambda cid: query_json(f"containers/{cid}/json"), alerts)
+        if alert:
+            self._alert(alert)
 
     def _alert(self, problem: dict) -> None:
-        log.info("alert: %s", problem["message"])
-        self.broadcast(
-            {
-                "type": "event",
-                "event": {
-                    "type": "alert",
-                    "action": problem["kind"],
-                    "severity": problem["severity"],
-                    "id": problem.get("containerId") or "",
-                    "name": problem["name"],
-                    "detail": problem["message"],
-                    **({"serviceId": problem["serviceId"]} if problem.get("serviceId") else {}),
-                },
-            }
-        )
+        from app.services.watch import watch  # late: watch imports this module
+
+        # An engine watched in the background reports its own alerts, over its own connection.
+        if not watch.covers(engines.active_id):
+            watch.emit(engines.active_id, problem)
 
     async def _swarm_watch_loop(self) -> None:
         """A failing Swarm task gets a new container each time, maybe on another node, so the

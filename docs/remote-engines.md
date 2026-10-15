@@ -23,9 +23,25 @@ Pierside reaches the Docker socket by SSH socket forwarding. If the server disal
 
 Give an engine a colour (when adding it, or **Engines → Colour**). While that engine is active, Pierside is framed in the colour and shows a banner with the engine's name. A red frame for production makes it hard to delete the wrong thing.
 
-## At a glance
+## Engines at a glance
 
-The top of the **Engines** page has a card for every engine: whether it can be reached, how many containers run, and which need attention (restarting, unhealthy, dead, or exited with an error in the last hours), without switching to it. Hover a problem to see the containers' names; **Switch** makes that engine the active one. Opening the page asks each engine once, over a separate connection that is closed again when idle; the refresh button asks again.
+**Engines at a glance**, the second line of the engine switcher at the top of the sidebar, has a card for every engine, without switching to it:
+
+- whether it can be reached, and how many containers run;
+- the CPU and memory its running containers use (100% is one core);
+- which containers need attention: restarting, unhealthy, dead, or exited with an error in the last hours. Hover a problem to see the containers' names; click it to switch to that engine and open the (first) container's logs.
+
+The page keeps itself up to date while it is open: every 30 seconds by default, or every 10 seconds, minute or 5 minutes, or only when you press **Refresh** (the menu at the top right). **Switch** makes an engine the active one.
+
+### Watching an engine in the background
+
+Switch on **Watch in the background** on an engine's card to keep an eye on it while you work on another engine:
+
+- its card stays up to date even while the page is closed;
+- its [alerts](alerts.md) (restart loops, out of memory, unhealthy, failing Swarm services) are shown like the active engine's, with the engine's name;
+- you are told when it can't be reached, and again when it is back.
+
+Pierside keeps a connection to each watched engine open for this. The alerts of every engine are listed under **Recent alerts** on the page, also those that came while no Pierside window was open (until Rancher Desktop is restarted).
 
 ## What differs on a remote engine
 

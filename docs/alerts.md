@@ -20,6 +20,8 @@ A container is in a restart loop when it has a restart policy (`always`, `unless
 
 Stopping, restarting or killing a container yourself is never counted, whether you do it in Pierside, with `docker`, or with Compose: Docker marks those differently from a container that exits by itself. Docker waits longer before each new attempt, up to a minute, which is why the window is five minutes.
 
+A container without such a restart policy is never reported, however often it exits: Docker doesn't restart it, so something else is starting it again. CI runners do this, for example GitLab Runner reuses its job containers for each stage of a job.
+
 On the Containers page, a container that is restarting or unhealthy also shows in the sidebar's red badge.
 
 ## Swarm services
@@ -33,4 +35,6 @@ Click the version number in the bottom bar and switch on **Desktop notifications
 - **In Rancher Desktop** the notification is shown by Rancher Desktop itself. Its title is always "Warning" or "Error"; the text starts with "Pierside" and says what happened and on which engine. Clicking it does nothing. It appears for every alert, also while you are looking at Pierside.
 - **In the separate window** it is your browser's notification, which asks for permission once. Clicking it goes to the container's logs or the service. It appears only when the Pierside window isn't the one in front.
 
-Notifications, like the alerts themselves, need Pierside to be open: in Rancher Desktop with the Pierside tab shown, or in the separate window. Nothing watches your containers while Pierside is closed. They cover the engine that is active; for the others, see **At a glance** on the Engines page ([Remote engines](remote-engines.md)).
+Alerts cover the engine that is active, and every engine you watch in the background (**Engines at a glance**, see [Remote engines](remote-engines.md#watching-an-engine-in-the-background)); an alert about another engine than the active one starts with its name. A watched engine that can't be reached is reported too, and again when it is back.
+
+Notifications need Pierside to be open: in Rancher Desktop with the Pierside tab shown, or in the separate window. Watched engines are watched while Rancher Desktop runs, even with Pierside closed; what happened in the meantime is listed under **Recent alerts** on the Engines at a glance page (until Rancher Desktop is restarted). The active engine is watched only while Pierside is open, unless you watch it in the background too.

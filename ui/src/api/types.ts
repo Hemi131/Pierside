@@ -72,7 +72,10 @@ export interface EngineEvent {
   /** Docker's event type (container, volume, …), "mcp" for AI access changes, or "alert" for a problem
    *  the backend found: then `action` is its kind, `detail` the text and `severity` how bad. */
   type: string;
-  severity?: "warning" | "error";
+  severity?: "info" | "warning" | "error";
+  /** Alerts: the engine it is about, which may not be the active one (engines watched in the background). */
+  engineId?: string;
+  engineName?: string;
   /** Alerts about a Swarm service. */
   serviceId?: string;
   /** e.g. "unhealthy" for health_status */

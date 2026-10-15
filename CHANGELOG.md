@@ -4,6 +4,15 @@ Each release of Pierside, newest first. Install a specific one with `rdctl exten
 
 ## Unreleased
 
+## 1.2.0 - 2026-10-15
+
+- **Engines at a glance** is its own page now, opened from the second line of the engine switcher at the top of the sidebar. It keeps itself up to date (every 30 seconds by default; 10 seconds to 5 minutes, or only on Refresh), shows the CPU and memory each engine's containers use, and a click on a problem opens the container on its engine.
+- **Watch an engine in the background:** a switch on each engine's card. A watched engine's alerts (restart loops, out of memory, unhealthy, failing Swarm services) arrive while another engine is active, named with the engine, and you are told when it can't be reached and when it is back. Recent alerts from all engines are listed on the page.
+- **Command palette** in the Exec tab: save the commands you type often under your own labels and run them in any container's shell with **Commands** or Ctrl+Shift+P. Each command either runs right away or is only typed so you can change it first, and can be offered everywhere, for an image (`postgres`, `mycorp/*`) or for a Compose project / service. One list for all engines, in Rancher and in the separate window.
+- Fixed: with a search in the logs, every batch of new lines moved to the next match and scrolled there. The current match and the view now stay where they are; new matches are still highlighted.
+- Fixed: containers started again and again by something other than Docker, such as a GitLab Runner's job containers, were reported as "keeps restarting" / "keeps crashing". Only containers that Docker itself restarts (restart policy `always`, `unless-stopped`, or `on-failure` after a failure) are reported now.
+- Fixed: on smaller screens, a tooltip near the right edge (such as Refresh on the Server disk page) could make the whole page jump a little to the left.
+
 ## 1.1.1 - 2026-10-11
 
 - Fixed: desktop notifications never appeared inside Rancher Desktop on Windows. They are now shown through Rancher Desktop's own notification call there; the separate window keeps using the browser's.

@@ -565,11 +565,14 @@ IDLE_CLOSE_S = 600
 
 
 class EngineClients:
-    """Docker clients per engine for MCP calls, independent of the engine the UI has active."""
+    """Docker clients per engine, independent of the engine the UI has active: for MCP calls, and
+    (a second pool, never closed for idleness) for watching engines in the background (watch.py)."""
 
-    def __init__(self) -> None:
+    def __init__(self, purpose: str = "mcp", idle_close_s: float | None = IDLE_CLOSE_S) -> None:
         self._open: dict[str, tuple[aiodocker.Docker, Tunnel | None, float]] = {}
         self._lock = asyncio.Lock()
+        self._purpose = purpose
+        self._idle_close_s = idle_close_s
 
     async def get(self, engine_id: str) -> aiodocker.Docker:
         async with self._lock:
@@ -585,7 +588,7 @@ class EngineClients:
                 if cfg is None:
                     raise EngineError("The engine this connection was set up for no longer exists in Pierside")
                 tunnel = Tunnel(cfg)
-                tunnel.path = os.path.join(SOCK_DIR, f"{cfg.id}-mcp.sock")  # separate from the UI's tunnel
+                tunnel.path = os.path.join(SOCK_DIR, f"{cfg.id}-{self._purpose}.sock")  # separate from the UI's tunnel
                 try:
                     await tunnel.start()
                 except Exception:
@@ -620,8 +623,10 @@ class EngineClients:
                 await tunnel.stop()
 
     async def _close_idle(self, keep: str) -> None:
+        if self._idle_close_s is None:
+            return
         now = time.monotonic()
-        for engine_id in [e for e, (_d, _t, used) in self._open.items() if e != keep and now - used > IDLE_CLOSE_S]:
+        for engine_id in [e for e, (_d, _t, used) in self._open.items() if e != keep and now - used > self._idle_close_s]:
             await self._close(engine_id)
 
     async def shutdown(self) -> None:

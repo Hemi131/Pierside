@@ -8,6 +8,7 @@ import { Alert, Box, Button, Chip, MenuItem, Select, Stack, TextField, Tooltip, 
 import BugReportOutlinedIcon from "@mui/icons-material/BugReportOutlined";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
+import TerminalIcon from "@mui/icons-material/Terminal";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
@@ -21,6 +22,8 @@ import { clipboardKeyHandler } from "../logs/clipboardKeys";
 import { terminalKeyHandler } from "./terminalKeys";
 import { PromptTracker } from "./promptTracker";
 import { useFeedback } from "../Feedback";
+import { CommandPalette } from "./CommandPalette";
+import type { ShellTarget } from "../../api/commands";
 
 type SessionState = "idle" | "connecting" | "open" | "exited" | "error";
 
@@ -30,7 +33,20 @@ interface Opts {
   workdir: string;
 }
 
-export function ShellView({ containerId, running, active, onStart }: { containerId: string; running: boolean; active: boolean; onStart?: () => void }) {
+export function ShellView({
+  containerId,
+  target,
+  running,
+  active,
+  onStart,
+}: {
+  containerId: string;
+  /** For the command palette: which of the user's commands are meant for this container. */
+  target: ShellTarget;
+  running: boolean;
+  active: boolean;
+  onStart?: () => void;
+}) {
   const theme = useTheme();
   const { toast } = useFeedback();
   const host = useRef<HTMLDivElement>(null);
@@ -48,6 +64,9 @@ export function ShellView({ containerId, running, active, onStart }: { container
   const [draftDebug, setDraftDebug] = useState(false);
   const stateRef = useRef(state);
   stateRef.current = state;
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  // Types a palette command into the shell (set up with the terminal below).
+  const typeCommand = useRef<(command: string, run: boolean) => void>(() => undefined);
 
   // Terminal instance (once).
   useEffect(() => {
@@ -83,7 +102,25 @@ export function ShellView({ containerId, running, active, onStart }: { container
         prompt.resetExpected(); // the pasted text moves the cursor
       },
     });
-    t.attachCustomKeyEventHandler((e) => editKeys(e) && clipKeys(e));
+    t.attachCustomKeyEventHandler((e) => {
+      if (e.ctrlKey && e.shiftKey && !e.altKey && e.code === "KeyP") {
+        if (e.type === "keydown") setPaletteOpen(true);
+        return false;
+      }
+      return editKeys(e) && clipKeys(e);
+    });
+    // Like a paste: xterm turns line breaks into Enter and wraps the text in bracketed-paste
+    // markers when the shell asked for them, so a multi-line command isn't run line by line.
+    typeCommand.current = (command, run) => {
+      const sock = ws.current;
+      if (!sock || sock.readyState !== WebSocket.OPEN) {
+        toast("error", "The shell isn't connected.");
+        return;
+      }
+      prompt.resetExpected();
+      t.paste(command);
+      if (run) sendInput("\r");
+    };
     term.current = t;
     fit.current = f;
     // Dev-only hook for browser tests (stripped from production builds).
@@ -270,6 +307,13 @@ export function ShellView({ containerId, running, active, onStart }: { container
             </Button>
           </span>
         </Tooltip>
+        <Tooltip title="Your commands (Ctrl+Shift+P)">
+          <span>
+            <Button variant="outlined" startIcon={<TerminalIcon />} onClick={() => setPaletteOpen(true)} disabled={state !== "open"}>
+              Commands
+            </Button>
+          </span>
+        </Tooltip>
         <Box sx={{ flex: 1 }} />
         <Chip size="small" label={chip[0]} color={chip[1]} variant={chip[1] === "default" ? "outlined" : "filled"} />
       </Stack>
@@ -316,6 +360,13 @@ export function ShellView({ containerId, running, active, onStart }: { container
           </Stack>
         )}
       </Box>
+      <CommandPalette
+        open={paletteOpen}
+        target={target}
+        onClose={() => setPaletteOpen(false)}
+        onClosed={() => term.current?.focus()}
+        onUse={(command, run) => typeCommand.current(command, run)}
+      />
     </Box>
   );
 }

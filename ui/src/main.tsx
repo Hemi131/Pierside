@@ -2,6 +2,7 @@ import "./diagnostics";
 import React from "react";
 import ReactDOM from "react-dom/client";
 import CssBaseline from "@mui/material/CssBaseline";
+import GlobalStyles from "@mui/material/GlobalStyles";
 import { AppThemeProvider } from "./theme";
 import { EngineProvider } from "./hooks/useEngine";
 import { FeedbackProvider } from "./components/Feedback";
@@ -21,6 +22,9 @@ async function start() {
     <React.StrictMode>
       <AppThemeProvider>
         <CssBaseline />
+        {/* The UI fills the window and scrolls inside its own panes. A tooltip or menu that sticks out past
+            the edge for a moment must not give the page a scrollbar, which shifts everything sideways. */}
+        <GlobalStyles styles={{ "html, body": { overflow: "hidden" } }} />
         {hasSession ? (
           <FeedbackProvider>
             <EngineProvider>
