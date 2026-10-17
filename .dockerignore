@@ -1,5 +1,6 @@
 **/node_modules
 ui/build
+ui/.env*
 **/__pycache__
 **/.venv
 docs

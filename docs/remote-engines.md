@@ -43,13 +43,26 @@ Switch on **Watch in the background** on an engine's card to keep an eye on it w
 
 Pierside keeps a connection to each watched engine open for this. The alerts of every engine are listed under **Recent alerts** on the page, also those that came while no Pierside window was open (until Rancher Desktop is restarted).
 
+## Server performance
+
+**Server performance** in the bottom bar is like `htop` for the server, with each process's container next to it. Nothing has to be installed on the server: Pierside reads the figures over the SSH connection every 2 seconds while the page is open, and stops when you leave it.
+
+- **At the top:** CPU (with the time spent waiting for the disk, and "steal" on a virtual machine whose host is overloaded), memory (with the cache the system gives back when needed, and swap), disks and network, with charts of the last 10 minutes.
+- **A note** when something stands out: memory almost full, the server swapping, the CPU waiting for the disk, high load.
+- **Processes:** CPU, memory, disk reads and writes, how long they have been running, and the command. Click a column to sort, search by command, user, container or process number, or **Group by container** to see at once how much each container uses, and how much the server's own processes do. 100 % CPU is one full core, as in `htop`. While the pointer is on the list, its rows stay in place (the figures keep updating), so a row and its ⋮ don't move away under the pointer; new processes are added at the bottom and ended ones are greyed out. **Hold order under the pointer** (on by default) switches this off.
+- **What you can do** with a process (the ⋮ menu): open its container, copy its command line, **Lower priority**, **End** (asks it to stop) or **Force end** (stops it at once). Each asks first and shows exactly which process (its name and user as the system knows them, and its command line), with a warning for processes the server depends on, such as `sshd` or `dockerd`. A container's main process ignores **End**; use **Force end**, or stop the container.
+
+As your SSH user, Pierside sees every process's CPU and memory, but disk reads and writes only for your own processes, and you can only end your own. With **Use Docker where I have no permission** switched on (at the top of the page; the same setting as in Server files and Server disk), everything is read and done as root, through a short-lived helper container on the server that is removed when you leave the page. It shares the server's processes (not its files or network) and may read every process's I/O figures and change its priority.
+
+**Alert me about this server** (at the top of the page) checks the server every 30 seconds, also while you work on another engine: you get an [alert](alerts.md#server-alerts) when its memory is almost full, it keeps swapping, its load stays high, or a disk is 90 % full.
+
 ## What differs on a remote engine
 
 Most of Pierside works the same on a remote engine. In short:
 
 - **Compose** runs on the server, where the project's files are, instead of on your computer.
 - **Terminal** in the bottom bar is a full shell on the server instead of a Docker console.
-- **Server files** in the bottom bar browses and edits the server's own files, and **Server disk** next to it shows what takes the server's disk space; both exist only for SSH engines.
+- **Server files**, **Server performance** and **Server disk** in the bottom bar show the server itself: its files, what uses its CPU, memory, disks and network, and what takes its disk space. They exist only for SSH engines.
 - **Port links** open the server's address, and **Forward a port** brings a remote container's port to your `localhost` through the SSH connection.
 
 The full list, with the reason for each difference, is in [What works where](what-works-where.md#local-engine-or-ssh-engine).
@@ -57,3 +70,5 @@ The full list, with the reason for each difference, is in [What works where](wha
 ## Where credentials are stored
 
 Keys and passwords are stored in Pierside's data volume (`pierside-data`) on your machine and are only used to open the SSH connection. Removing an engine deletes its stored key. Anyone who can use Docker on your machine can read that volume, as they can read any volume.
+
+They are stored as they are needed to connect: a password in plain text, a key together with its passphrase. A passphrase therefore doesn't protect the key while it is stored there; nothing inside Rancher Desktop's VM could keep it better. Give Pierside a key of its own (for example `ssh-keygen -t ed25519 -f ~/.ssh/pierside`, added to the server's `authorized_keys`) rather than your personal one, so you can revoke it on its own.

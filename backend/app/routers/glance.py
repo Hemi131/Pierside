@@ -12,6 +12,8 @@ class Settings(BaseModel):
     interval: int | None = None
     # engine id -> watched in the background
     watch: dict[str, bool] | None = None
+    # SSH engine id -> its server checked for memory, swapping, load and full disks (server alerts)
+    serverAlerts: dict[str, bool] | None = None
 
 
 @router.get("")
@@ -24,7 +26,7 @@ async def glance():
 @router.put("/settings")
 async def settings(body: Settings):
     try:
-        watch.configure(body.interval, body.watch)
+        watch.configure(body.interval, body.watch, body.serverAlerts)
     except ValueError as e:
         raise HTTPException(400, str(e))
     return watch.state()

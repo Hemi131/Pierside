@@ -158,6 +158,21 @@ async def remove_all_helpers() -> None:
     await asyncio.gather(*(_remove(c["Id"]) for c in stale), return_exceptions=True)
 
 
+async def remove_idle_volume_helpers() -> None:
+    """Before a volume prune: the volume browser's helpers keep volumes "in use". Remove those that are
+    idle, but not one serving a download or upload right now, nor any other helper (Server files and
+    disk, debug shells, AI access, port forwards), which may be in use too."""
+    for key, (cid, _last) in list(_helpers.items()):
+        if not busy(cid):
+            _helpers.pop(key, None)
+    try:
+        found = await query_json("containers/json", params={"all": "1", "filters": f'{{"label":["{HELPER_LABEL}=true"]}}'})
+    except Exception:
+        return
+    idle = [c["Id"] for c in found if f"{HELPER_LABEL}.volume" in (c.get("Labels") or {}) and not busy(c["Id"])]
+    await asyncio.gather(*(_remove(cid) for cid in idle), return_exceptions=True)
+
+
 async def release_volume(volume: str) -> None:
     """Drop the helpers for a volume (e.g. before deleting the volume)."""
     for writable in (False, True):

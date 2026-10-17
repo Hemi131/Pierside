@@ -25,7 +25,8 @@ import { usePersistentState } from "../../hooks/usePersistentState";
 import { useFeedback } from "../Feedback";
 import { copyText } from "../../utils/format";
 import { MONO } from "../../theme";
-import { fg, stripAnsi } from "./ansi";
+import { fg, logSafe, stripAnsi } from "./ansi";
+import { inInteractiveTerminal } from "../../utils/keys";
 import { LogLine, MAX_LINES, useLogStream } from "./useLogStream";
 import { xtermTheme } from "./xtermTheme";
 import { attachClipboardKeys } from "./clipboardKeys";
@@ -99,7 +100,7 @@ export function LogViewer({ path, params, prefix, plainPrefix, lineFilter, filte
     (l: LogLine) => {
       const s = settings.current;
       const ts = s.showTs ? fg(l.s === "stderr" ? errColor : tsColor, fmtTs(l)) + " " : "";
-      return ts + (s.prefix ? s.prefix(l) : "") + l.m;
+      return ts + (s.prefix ? s.prefix(l) : "") + logSafe(l.m);
     },
     [tsColor, errColor],
   );
@@ -272,7 +273,7 @@ export function LogViewer({ path, params, prefix, plainPrefix, lineFilter, filte
   useEffect(() => {
     if (!active) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "f" && (e.ctrlKey || e.metaKey)) {
+      if (e.key === "f" && (e.ctrlKey || e.metaKey) && !inInteractiveTerminal(e.target)) {
         e.preventDefault();
         searchInput.current?.focus();
         searchInput.current?.select();
@@ -468,7 +469,7 @@ export function LogViewer({ path, params, prefix, plainPrefix, lineFilter, filte
           "& .xterm-viewport": { bgcolor: "transparent !important" },
         }}
       >
-        <Box ref={host} sx={{ position: "absolute", inset: 0 }} />
+        <Box ref={host} data-log-view sx={{ position: "absolute", inset: 0 }} />
         {lineCount === 0 && state !== "connecting" && (
           <Typography color="text.secondary" sx={{ position: "absolute", top: 16, left: 16, pointerEvents: "none" }}>
             No logs yet.

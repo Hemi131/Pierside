@@ -8,7 +8,19 @@ import time
 from collections.abc import AsyncIterator
 from typing import TypedDict
 
+import aiodocker
+import aiohttp
+
 from app.services.docker_client import get_docker, query_json, STREAM_TIMEOUT
+
+def transient(e: BaseException) -> bool:
+    """A failure that passes: the stream is reopened from where it was (an SSH channel drop, a reset,
+    an engine briefly unreachable, which aiodocker reports as status 900, or a gateway error)."""
+    if isinstance(e, aiodocker.DockerError):
+        # Not every 5xx: 501 "logging driver does not support reading" (--log-driver none, remote
+        # drivers) is permanent and must show as an error, not reopen every second.
+        return e.status in (900, 502, 503, 504)
+    return isinstance(e, (aiohttp.ClientError, asyncio.TimeoutError, OSError))
 
 log = logging.getLogger("pierside.logs")
 
@@ -110,7 +122,17 @@ async def follow_container_logs(
     # timestamp order, and a "newer than the last line" filter would lose some of them.
     seen = 0
     while True:
-        info = await query_json(f"containers/{cid}/json")
+        try:
+            info = await query_json(f"containers/{cid}/json")
+        except Exception as e:
+            if isinstance(e, aiodocker.DockerError) and e.status == 404:
+                if on_status:
+                    await on_status("removed")
+                return
+            if not transient(e):
+                raise
+            await asyncio.sleep(2.0)  # the engine is briefly unreachable: ask again
+            continue
         tty = bool((info.get("Config") or {}).get("Tty"))
         running = (info.get("State") or {}).get("Running", False)
         params = {"follow": "1", "stdout": "1", "stderr": "1", "timestamps": "1"}
@@ -122,12 +144,21 @@ async def follow_container_logs(
             seen = last_key
         if on_status:
             await on_status("streaming" if running else "stopped")
-        async for batch in raw_log_lines(cid, tty, params):
-            if seen:
-                batch = [l for l in batch if l["k"] > seen or l["k"] == 0]
-            if batch:
-                last_key = max(last_key, max(l["k"] for l in batch))
-                yield batch
+        try:
+            async for batch in raw_log_lines(cid, tty, params):
+                if seen:
+                    batch = [l for l in batch if l["k"] > seen or l["k"] == 0]
+                if batch:
+                    last_key = max(last_key, max(l["k"] for l in batch))
+                    yield batch
+        except Exception as e:
+            if not transient(e):
+                raise
+            # The stream broke, not the container: reopen from the last line (not the whole tail again).
+            log.info("log stream of %s broke (%s); reopening", cid[:12], e)
+            first = first and last_key == 0
+            await asyncio.sleep(1.0)
+            continue
         first = False
         if not follow_restarts:
             return
@@ -138,9 +169,13 @@ async def follow_container_logs(
             await asyncio.sleep(1.0)
             try:
                 info = await query_json(f"containers/{cid}/json")
-            except Exception:
-                if on_status:
-                    await on_status("removed")
-                return
+            except Exception as e:
+                if isinstance(e, aiodocker.DockerError) and e.status == 404:
+                    if on_status:
+                        await on_status("removed")
+                    return
+                if not transient(e):
+                    raise
+                continue  # one failed look isn't a removed container
             if (info.get("State") or {}).get("Running"):
                 break

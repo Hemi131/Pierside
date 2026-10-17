@@ -50,7 +50,7 @@ You can also set the trust period in the connection's settings, and withdraw it 
 If the connection may change things, Pierside can also ask before **each** such action and shows exactly what the assistant is about to do. **Ask before each action** in the connection's settings has three choices:
 
 - **Every action that changes something** (the default),
-- **Only deleting, overwriting and running commands**,
+- **Only deleting, overwriting and running commands** (starting a container with a folder of the host mounted counts as this too, since it can change files on your machine),
 - **Never**.
 
 "Always trust" together with "Never" means the assistant is not held up by any question.
@@ -80,7 +80,7 @@ These apply to the containers chosen under **Which containers**.
 
 **Log limits.** A request returns the newest 200 lines unless the assistant asks for more, and never more than the connection's **Most log lines per request** (500 unless you change it, at most 5000). A text filter searches only that many newest lines of the requested time window, not the whole log. "Allow everything" connections use the maximum, 5000. Any single answer is also cut at 200,000 characters.
 
-A new or renamed container must have a name the connection covers. New containers can't mount the Docker socket, system folders of the host such as `/etc`, `/usr` or `/var/lib/docker` (or a folder that contains one, such as `/var`), or the volumes of Pierside and other extensions. A host path with a symbolic link in it is refused too, and so is a path inside a folder that a container the assistant can reach mounts writable: otherwise the assistant could make a link there that leads to a system folder. Mounting a volume that already exists also needs **See volumes**. They can't use the host's network or share another container's (`container:…`).
+A new or renamed container must have a name the connection covers. New containers can't mount the Docker socket, system folders of the host such as `/etc`, `/usr` or `/var/lib/docker` (or a folder that contains one, such as `/var`), or the volumes of Pierside and other extensions. A host path with a symbolic link in it is refused too, and so is a path inside a folder that a container the assistant can reach mounts writable: otherwise the assistant could make a link there that leads to a system folder. Mounting a volume that already exists also needs **See volumes**. They can't use the host's network or share another container's (`container:…`). They can join any network the connection may see, including a macvlan or ipvlan network if the engine has one: that puts the container on your local network (not into the host's own).
 
 **Allow mounting host system folders** lifts the mount rule. It appears only under **Allow everything** and is off unless you switch it on. With it, the assistant can start a container with the Docker socket or `/var/lib/docker` mounted, which is full control of the engine's machine: it reaches everything that is otherwise kept back, including Pierside's own data with your saved SSH keys and passwords. Use it only on an engine where that is acceptable.
 
@@ -156,7 +156,7 @@ Not even with "Allow everything":
 - **Logs and files can contain secrets.** Passwords printed at start-up, tokens in config files and the values of environment variables go to the assistant, and so to the AI provider, if you allow them. Share narrowly.
 - **Image details can contain secrets too.** With environment values hidden, the build history still shows `RUN` lines as they were written; a secret typed directly into a Dockerfile command is visible there.
 - **Run commands removes the other limits** for the containers it covers: a command can read any file and change anything inside them. Leave it off unless you need it.
-- **The engine-wide permissions show more than the shared containers.** **See images**, **See volumes** and **See networks** list everything of that kind on the engine. **Engine info** gives totals for the whole engine, but names only what the connection can see anyway: its own containers in engine events and in the largest items of disk usage, and images, volumes and networks only with the permission for them.
+- **The engine-wide permissions show more than the shared containers.** **See images** and **See networks** list everything of that kind on the engine. **See volumes** lists the volumes that are unused or used only by shared containers (all volumes when the connection shares all containers): a volume holds the data of the containers using it. Lists of a network's or volume's containers name only shared ones. **Engine info** gives totals for the whole engine, but names only what the connection can see anyway: its own containers in engine events and in the largest items of disk usage, and images, volumes and networks only with the permission for them.
 - **Container output is untrusted text.** A container can print something that reads like instructions. Read-only connections limit what such text could cause.
 - A connection that uses an access token keeps that token in the assistant's configuration in plain text. Prefer the approval mode unless the assistant must run unattended.
 

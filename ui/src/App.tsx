@@ -16,6 +16,7 @@ import { GlanceView } from "./views/glance/GlanceView";
 import { AccessView } from "./views/access/AccessView";
 import { ServerFilesView } from "./views/serverfiles/ServerFilesView";
 import { ServerDiskView } from "./views/serverdisk/ServerDiskView";
+import { ServerPerfView } from "./views/serverperf/ServerPerfView";
 import { NetworksView } from "./views/networks/NetworksView";
 import { NetworkDetail } from "./views/networks/NetworkDetail";
 import { DiskUsageView } from "./views/disk/DiskUsageView";
@@ -54,6 +55,8 @@ function Routes({ route }: { route: string[] }) {
       return <AccessView />;
     case "server-files":
       return <ServerFilesView key={id ?? ""} path={id} />;
+    case "server-perf":
+      return <ServerPerfView />;
     case "server-disk":
       return <ServerDiskView path={id} />;
     default:

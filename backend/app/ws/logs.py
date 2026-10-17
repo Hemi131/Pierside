@@ -16,7 +16,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from app.services.containers import SERVICE_LABEL, project_containers
 from app.services.docker_client import query_json
-from app.services.logs import LogLine, follow_container_logs, raw_log_lines
+from app.services.logs import LogLine, follow_container_logs, raw_log_lines, transient
 from app.ws.common import accept_authorized
 
 router = APIRouter()
@@ -105,6 +105,7 @@ async def ws_container_logs(ws: WebSocket, cid: str):
 
 
 REORDER_HOLD_S = 0.3  # lines are held this long so streams that arrive slightly late sort correctly
+INITIAL_HOLD_S = 2.0  # at the start, the tails of all streams are held this long and sorted together
 PROJECT_POLL_S = 2.0
 
 
@@ -115,6 +116,8 @@ class ReorderBuffer:
         self.sink = sink
         self.pending: list[tuple[float, int, LogLine]] = []
         self.seq = 0
+        # A slow service's tail can arrive a second after a fast one's newer lines: hold the start longer.
+        self.start_until = time.monotonic() + INITIAL_HOLD_S
 
     def add(self, lines: list[LogLine]) -> None:
         now = time.monotonic()
@@ -125,7 +128,7 @@ class ReorderBuffer:
     async def run(self) -> None:
         while True:
             await asyncio.sleep(0.1)
-            if not self.pending:
+            if not self.pending or time.monotonic() < self.start_until:
                 continue
             cutoff = time.monotonic() - REORDER_HOLD_S
             ready = [p for p in self.pending if p[0] <= cutoff]
@@ -236,8 +239,13 @@ async def _follow_service(sid: str, tail: str, on_batch, label_for_task) -> None
     while True:
         try:
             svc = await query_json(f"services/{sid}")
-        except aiodocker.DockerError:
-            return  # service removed
+        except Exception as e:
+            if isinstance(e, aiodocker.DockerError) and e.status == 404:
+                return  # service removed
+            if not transient(e):
+                raise
+            await asyncio.sleep(2.0)
+            continue
         tty = bool(((svc.get("Spec") or {}).get("TaskTemplate") or {}).get("ContainerSpec", {}).get("TTY"))
         params = {"follow": "1", "stdout": "1", "stderr": "1", "timestamps": "1", "details": "1"}
         if first:
@@ -246,19 +254,24 @@ async def _follow_service(sid: str, tail: str, on_batch, label_for_task) -> None
             seen_by_task = dict(last_by_task)
             since = max(max(last_by_task.values(), default=0) - 2_000_000_000, 0)
             params["since"] = f"{since // 1_000_000_000}.{since % 1_000_000_000:09d}"
-        async for batch in raw_log_lines(sid, tty, params, path=f"services/{sid}/logs"):
-            out = []
-            for line in batch:
-                task = _split_details(line).get("com.docker.swarm.task.id", "")
-                if line["k"] and line["k"] <= seen_by_task.get(task, 0):
-                    continue
-                if line["k"]:
-                    last_by_task[task] = max(line["k"], last_by_task.get(task, 0))
-                line["svc"] = await label_for_task(task)  # type: ignore[typeddict-unknown-key]
-                out.append(line)
-            if out:
-                on_batch(out)
-        first = False
+        try:
+            async for batch in raw_log_lines(sid, tty, params, path=f"services/{sid}/logs"):
+                out = []
+                for line in batch:
+                    task = _split_details(line).get("com.docker.swarm.task.id", "")
+                    if line["k"] and line["k"] <= seen_by_task.get(task, 0):
+                        continue
+                    if line["k"]:
+                        last_by_task[task] = max(line["k"], last_by_task.get(task, 0))
+                    line["svc"] = await label_for_task(task)  # type: ignore[typeddict-unknown-key]
+                    out.append(line)
+                if out:
+                    on_batch(out)
+        except Exception as e:
+            if not transient(e):
+                raise
+            log.info("log stream of service %s broke (%s); reopening", sid[:12], e)  # from the last line
+        first = first and not last_by_task
         await asyncio.sleep(1.0)
 
 

@@ -99,8 +99,12 @@ function PruneDialog({ open, onClose, onDone }: { open: boolean; onClose: () => 
   const run = async () => {
     setBusy(true);
     try {
-      const r = await api.post<{ deleted: string[]; spaceReclaimed: number }>(`/images/prune?mode=${mode}`);
-      toast("success", `${r.deleted.length} image layer${r.deleted.length === 1 ? "" : "s"} removed, ${formatBytes(r.spaceReclaimed)} reclaimed`);
+      const r = await api.post<{ deleted: string[]; spaceReclaimed: number; failed?: string[]; kept?: string[] }>(`/images/prune?mode=${mode}`);
+      // "unused" goes image by image (keeping Rancher's, Kubernetes' and extensions' images); "dangling" is the engine's prune.
+      const what = mode === "unused" ? "image" : "image layer";
+      const kept = r.kept?.length ? ` (${r.kept.length} of Rancher Desktop, Kubernetes or extensions kept)` : "";
+      toast("success", `${r.deleted.length} ${what}${r.deleted.length === 1 ? "" : "s"} removed, ${mode === "unused" ? "at most " : ""}${formatBytes(r.spaceReclaimed)} reclaimed${kept}`);
+      if (r.failed?.length) toast("warning", `Not deleted: ${r.failed.slice(0, 3).join("; ")}${r.failed.length > 3 ? ` and ${r.failed.length - 3} more` : ""}`);
       onDone();
       onClose();
     } catch (e) {

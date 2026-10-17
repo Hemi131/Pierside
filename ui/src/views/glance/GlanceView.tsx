@@ -3,7 +3,7 @@
  * kept up to date at the chosen interval while this page is open. Engines watched in the background
  * are kept up to date always, and their alerts arrive while another engine is active.
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Alert,
   Box,
@@ -35,6 +35,10 @@ import { navigate } from "../../hooks/useRoute";
 
 /** How often the page reads the backend's snapshots (cheap: no engine is asked by that). */
 const READ_MS = 3000;
+/** …and while an engine is still being asked, so its card fills in as soon as it answers. */
+const READ_WAITING_MS = 400;
+/** …at most this long after opening the page or Refresh (an engine that doesn't answer stays "updating"). */
+const FAST_FOR_MS = 20_000;
 
 const intervalLabel = (s: number) => (s === 0 ? "Only when I refresh" : s < 60 ? `Every ${s} seconds` : s === 60 ? "Every minute" : `Every ${s / 60} minutes`);
 
@@ -54,7 +58,7 @@ function groups(problems: GlanceProblem[]): { label: string; items: GlanceProble
   return [...by].map(([kind, items]) => ({ label: `${items.length} ${kind}`, items }));
 }
 
-function Meter({ label, value, max, text }: { label: string; value: number; max: number; text: string }) {
+function Meter({ label, value, max, text, partial }: { label: string; value: number; max: number; text: string; partial?: boolean }) {
   const pct = max > 0 ? Math.min(100, (value / max) * 100) : 0;
   return (
     <Box sx={{ flex: 1, minWidth: 0 }}>
@@ -62,9 +66,12 @@ function Meter({ label, value, max, text }: { label: string; value: number; max:
         <Typography variant="body2" color="text.secondary">
           {label}
         </Typography>
-        <Typography variant="body2" noWrap sx={{ ml: 1 }}>
-          {text}
-        </Typography>
+        <Tooltip title={partial ? "Some containers didn't answer in time, so this is at least this much" : ""}>
+          <Typography variant="body2" noWrap sx={{ ml: 1 }}>
+            {partial ? "≥ " : ""}
+            {text}
+          </Typography>
+        </Tooltip>
       </Stack>
       <LinearProgress variant="determinate" value={pct} color={pct > 90 ? "error" : pct > 70 ? "warning" : "primary"} sx={{ height: 6, borderRadius: 3, bgcolor: "action.hover" }} />
     </Box>
@@ -121,8 +128,9 @@ function EngineCard({ e, now, busy, onWatch, onOpen }: { e: GlanceEngine; now: n
             </Typography>
           </Stack>
           <Stack direction="row" spacing={2} sx={{ mt: 1.25 }}>
-            <Meter label="CPU" value={e.cpu ?? 0} max={(e.cpus ?? 0) * 100} text={`${(e.cpu ?? 0).toFixed(1)}% / ${(e.cpus ?? 0) * 100}%`} />
-            <Meter label="Memory" value={e.mem ?? 0} max={e.memory ?? 0} text={`${formatBytes(e.mem ?? 0)} / ${formatBytes(e.memory)}`} />
+            {/* null until the first measurement is in (the counts above come first) */}
+            <Meter label="CPU" value={e.cpu ?? 0} max={(e.cpus ?? 0) * 100} partial={!!e.usagePartial} text={e.cpu == null ? "measuring…" : `${e.cpu.toFixed(1)}% / ${(e.cpus ?? 0) * 100}%`} />
+            <Meter label="Memory" value={e.mem ?? 0} max={e.memory ?? 0} partial={!!e.usagePartial} text={e.mem == null ? "measuring…" : `${formatBytes(e.mem)} / ${formatBytes(e.memory)}`} />
           </Stack>
           <Stack direction="row" flexWrap="wrap" useFlexGap spacing={0.5} sx={{ mt: 1.25, minHeight: 24 }}>
             {(e.problems ?? []).length === 0 ? (
@@ -224,20 +232,50 @@ export function GlanceView() {
   const [busy, setBusy] = useState(false);
   const [now, setNow] = useState(Date.now());
 
+  // Each engine is asked separately; while any is still being asked, read often, so each card fills in
+  // as soon as its own engine answers rather than all together at the next slow read.
+  // One read loop (a read asked for while one is on its way follows it), fast only while a card has
+  // no figures yet or shortly after opening / Refresh: an engine that never answers mustn't keep it fast.
+  const timer = useRef<number | undefined>(undefined);
+  const alive = useRef(true);
+  const inFlight = useRef(false);
+  const again = useRef(false);
+  const fastUntil = useRef(0);
   const read = useCallback(() => {
+    if (!alive.current) return;
+    if (inFlight.current) {
+      again.current = true;
+      return;
+    }
+    window.clearTimeout(timer.current);
+    inFlight.current = true;
+    let waiting = false;
     loadGlance()
       .then((g) => {
         setData(g);
         setError(null);
+        waiting = Date.now() < fastUntil.current && g.engines.some((e) => e.updatedAt == null || e.polling);
       })
       .catch((e) => setError((e as Error).message))
-      .finally(() => setNow(Date.now()));
+      .finally(() => {
+        inFlight.current = false;
+        if (!alive.current) return;
+        setNow(Date.now());
+        if (again.current) {
+          again.current = false;
+          read();
+        } else timer.current = window.setTimeout(read, waiting ? READ_WAITING_MS : READ_MS);
+      });
   }, []);
 
   useEffect(() => {
+    alive.current = true;
+    fastUntil.current = Date.now() + FAST_FOR_MS;
     read();
-    const t = window.setInterval(read, READ_MS);
-    return () => window.clearInterval(t);
+    return () => {
+      alive.current = false;
+      window.clearTimeout(timer.current);
+    };
   }, [read]);
 
   const save = async (s: { interval?: number; watch?: Record<string, boolean> }) => {
@@ -251,7 +289,8 @@ export function GlanceView() {
   const refresh = async () => {
     try {
       await refreshGlance();
-      window.setTimeout(read, 300);
+      fastUntil.current = Date.now() + FAST_FOR_MS;
+      read();
     } catch (e) {
       toast("error", (e as Error).message);
     }

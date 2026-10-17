@@ -631,10 +631,11 @@ async def disk_usage(cx: Ctx, args: dict) -> str:
     out = {}
     # Totals are for the whole engine; names are given only for what the connection may see anyway.
     shared = {_name(c) for c in await _containers(cx)}
+    outside = await _volumes_out_of_scope(cx) if cx.profile.allows("volumes") else set()
     named = {
         "images": lambda n: cx.profile.allows("images"),
         "containers": lambda n: n.lstrip("/") in shared,
-        "volumes": lambda n: cx.profile.allows("volumes"),
+        "volumes": lambda n: cx.profile.allows("volumes") and n not in outside,
         "buildCache": lambda n: True,
     }
     for key in ("images", "containers", "volumes", "buildCache"):
@@ -666,6 +667,7 @@ async def engine_events(cx: Ctx, args: dict) -> str:
     now = int(time.time())
     async with cx.docker._query("events", params={"since": str(int(now - minutes * 60)), "until": str(now)}) as resp:
         data = await resp.read()
+    outside = await _volumes_out_of_scope(cx) if cx.profile.allows("volumes") else set()
     rows = []
     for line in data.splitlines():
         try:
@@ -689,6 +691,8 @@ async def engine_events(cx: Ctx, args: dict) -> str:
                 continue
         elif kind in ("image", "volume"):
             if not cx.profile.allows(kind + "s") or (attrs.get("container") and not cx.profile.all_containers()):
+                continue
+            if kind == "volume" and name in outside:  # list_volumes doesn't show it either
                 continue
         elif kind in ("service", "secret", "config", "node"):
             if not cx.profile.allows("swarm"):  # like list_swarm / list_swarm_secrets
@@ -836,10 +840,8 @@ async def container_changes(cx: Ctx, args: dict) -> str:
 @tool("container_run_command", "inspect", "read", "The `docker run` command line that would recreate a container with its current settings.", {"container": _CONTAINER}, ("container",))
 async def container_run_command(cx: Ctx, args: dict) -> str:
     c = await _resolve(cx, args.get("container"))
-    command = await docker_run_command(c["Id"], query=cx.docker._query_json)
-    if not cx.profile.show_env():
-        command = re.sub(r"(-e |--env )(['\"]?)([A-Za-z_][A-Za-z0-9_]*)=\S*", r"\1\2\3=***", command)
-    return command
+    # Masked while the command is built (before quoting), so values with spaces or odd names are hidden whole.
+    return await docker_run_command(c["Id"], query=cx.docker._query_json, redact=not cx.profile.show_env())
 
 
 @tool(
@@ -1039,6 +1041,8 @@ async def run_container(cx: Ctx, args: dict) -> str:
             if existing and not cx.profile.allows("volumes"):
                 # It may hold the data of a container this connection doesn't cover.
                 raise Denied(f"Mounting the existing volume {source} needs the See volumes permission; a new volume name works without it")
+            if existing and not await _volume_in_scope(cx, source):
+                raise Denied(f"The volume {source} is used by containers this connection doesn't cover")
         config["HostConfig"]["Binds"].append(str(spec))
     await _check_binds(cx, list(dict.fromkeys(host_sources)))
     if args.get("restart"):
@@ -1052,7 +1056,12 @@ async def run_container(cx: Ctx, args: dict) -> str:
         if network == "host" or ":" in network:
             raise Denied("That network mode isn't allowed for containers started here; name a network from list_networks, or `none`")
         if network not in ("bridge", "none", "default"):
-            network = (await _network(cx, network))["Name"]
+            n = await _network(cx, network)
+            # Docker also takes a network ID or ID prefix: the host network found that way is refused
+            # just like by name (and the null network goes by its name, `none`, only).
+            if n.get("Driver") in ("host", "null"):
+                raise Denied("That network mode isn't allowed for containers started here; name a network from list_networks, or `none`")
+            network = n["Name"]
         config["HostConfig"]["NetworkMode"] = network
     try:
         created = await cx.post("containers/create", config, name=name)
@@ -1512,6 +1521,26 @@ def _protected_volume(v: dict) -> bool:
     return _protected_labels(v.get("Labels"), v.get("Name", ""))
 
 
+async def _volumes_out_of_scope(cx: Ctx) -> set[str]:
+    """Names of the volumes used by containers this connection doesn't share (see _volume_in_scope)."""
+    if cx.profile.all_containers():
+        return set()
+    out = set()
+    for c in await cx.get("containers/json", all="1"):
+        if not _shared(cx.profile, c):
+            out |= {m["Name"] for m in c.get("Mounts") or [] if m.get("Type") == "volume" and m.get("Name")}
+    return out
+
+
+async def _volume_in_scope(cx: Ctx, name: str) -> bool:
+    """A volume holds the data of the containers using it: unless the profile shares all containers, it
+    is available only while unused or used by shared containers alone."""
+    if cx.profile.all_containers():
+        return True
+    users = await cx.get("containers/json", all="1", filters=json.dumps({"volume": [name]}))
+    return all(_shared(cx.profile, c) for c in users)
+
+
 async def _volume(cx: Ctx, ref) -> dict:
     name = ref.strip() if isinstance(ref, str) else ""
     if not name:
@@ -1522,7 +1551,7 @@ async def _volume(cx: Ctx, ref) -> dict:
         if e.status != 404:
             raise
         v = None
-    if v is None or _protected_volume(v):
+    if v is None or _protected_volume(v) or not await _volume_in_scope(cx, v["Name"]):
         raise ToolError(f"No volume named {name!r} on this engine (see list_volumes)")
     return v
 
@@ -1531,13 +1560,22 @@ async def _volume(cx: Ctx, ref) -> dict:
 async def list_volumes(cx: Ctx, args: dict) -> str:
     data, containers = await asyncio.gather(cx.get("volumes"), cx.get("containers/json", all="1"))
     users: dict[str, list[str]] = {}
+    outside: set[str] = set()  # volumes a container this connection doesn't cover uses
     for c in containers:
-        if _protected(c):
-            continue
+        shared = _shared(cx.profile, c)
         for m in c.get("Mounts") or []:
             if m.get("Type") == "volume" and m.get("Name"):
-                users.setdefault(m["Name"], []).append(_name(c))
-    rows = [{"name": v["Name"], "driver": v.get("Driver"), "created": v.get("CreatedAt"), "composeProject": (v.get("Labels") or {}).get(PROJECT_LABEL), "usedBy": users.get(v["Name"], [])} for v in data.get("Volumes") or [] if not _protected_volume(v)]
+                if shared:
+                    users.setdefault(m["Name"], []).append(_name(c))
+                else:
+                    outside.add(m["Name"])
+    if cx.profile.all_containers():
+        outside = set()  # only protected containers are left out, and their volumes are protected anyway
+    rows = [
+        {"name": v["Name"], "driver": v.get("Driver"), "created": v.get("CreatedAt"), "composeProject": (v.get("Labels") or {}).get(PROJECT_LABEL), "usedBy": users.get(v["Name"], [])}
+        for v in data.get("Volumes") or []
+        if not _protected_volume(v) and v["Name"] not in outside
+    ]
     return _json(sorted(rows, key=lambda r: r["name"])) if rows else "No volumes on this engine."
 
 
@@ -1623,6 +1661,9 @@ async def _network(cx: Ctx, ref) -> dict:
         if e.status != 404:
             raise
         n = None
+    # The answer must be the network asked for (by name, or by ID / ID prefix), and a network at all.
+    if n is not None and not ("Id" in n and (n.get("Name") == name or str(n["Id"]).startswith(name))):
+        n = None
     if n is None or _protected_labels(n.get("Labels"), n.get("Name", "")):
         raise ToolError(f"No network named {name!r} on this engine (see list_networks)")
     return n
@@ -1637,7 +1678,7 @@ async def list_networks(cx: Ctx, args: dict) -> str:
     nets, containers = await asyncio.gather(cx.get("networks"), cx.get("containers/json", all="1"))
     members: dict[str, list[str]] = {}
     for c in containers:
-        if _protected(c):
+        if not _shared(cx.profile, c):  # name only containers this connection could list
             continue
         for net in ((c.get("NetworkSettings") or {}).get("Networks") or {}).keys():
             members.setdefault(net, []).append(_name(c))
@@ -1648,7 +1689,9 @@ async def list_networks(cx: Ctx, args: dict) -> str:
 @tool("inspect_network", "networks", "read", "A network's details: driver, subnets and gateways, options, and the attached containers with their addresses.", {"network": {"type": "string"}}, ("network",))
 async def inspect_network(cx: Ctx, args: dict) -> str:
     n = await _network(cx, args.get("network"))
-    attached = [{"container": v.get("Name"), "ipv4": v.get("IPv4Address"), "mac": v.get("MacAddress")} for v in (n.get("Containers") or {}).values() if not _protected_labels({}, v.get("Name", ""))]
+    # By ID against the containers this connection could list (a name alone can't tell a protected one).
+    shared = {c["Id"] for c in await cx.get("containers/json", all="1") if _shared(cx.profile, c)}
+    attached = [{"container": v.get("Name"), "ipv4": v.get("IPv4Address"), "mac": v.get("MacAddress")} for cid, v in (n.get("Containers") or {}).items() if cid in shared]
     return _json({"name": n.get("Name"), "id": n.get("Id", "")[:12], "driver": n.get("Driver"), "scope": n.get("Scope"), "internal": n.get("Internal"), "ipam": (n.get("IPAM") or {}).get("Config"), "options": n.get("Options"), "labels": n.get("Labels"), "containers": attached})
 
 
@@ -1955,22 +1998,87 @@ def _compose_result(code: int, out: str, err: str, done: str) -> str:
 async def compose_config(cx: Ctx, args: dict) -> str:
     meta = await _project_meta(cx, args.get("project"))
     _only_remote(cx, meta, "resolve the Compose configuration")
-    code, out, err = await _compose(cx, meta, ["config"], 60)
+    show = cx.profile.show_env()
+    # Without "show environment values": variables are not filled in (`--no-interpolate` keeps them as
+    # ${NAME}, wherever they are used: command, labels, driver options, …), and the values written into
+    # the files themselves are masked where secrets usually are (_mask_compose).
+    if show:
+        code, out, err = await _compose(cx, meta, ["config"], 60)
+        if code != 0:
+            raise ToolError(f"docker compose exited with {code}:\n{_ANSI.sub('', err).strip()[-4000:]}")
+        return _cap(out)
+    return _cap(await _masked_config(cx, meta))
+
+
+_HIDDEN_NOTE = (
+    "(environment values hidden: variables are left as ${NAME}, and values written into the files are shown as *** "
+    "in environment, build arguments, driver options, inline config / secret contents and x-… extension blocks)\n"
+)
+
+
+async def _masked_config(cx: Ctx, meta: dict) -> str:
+    """The project's configuration as Compose merges it, without filling in variables, values masked."""
+    code, out, err = await _compose(cx, meta, ["config", "--no-interpolate", "--format", "json"], 60)
     if code != 0:
         raise ToolError(f"docker compose exited with {code}:\n{_ANSI.sub('', err).strip()[-4000:]}")
-    return _cap(out)
+    try:
+        config = json.loads(out)
+    except ValueError:
+        raise ToolError("Couldn't read the resolved configuration to hide its environment values")
+    return _HIDDEN_NOTE + json.dumps(_mask_compose(config), indent=2)
+
+
+_SECRET_KEYS = ("environment", "args", "driver_opts", "content")
+
+
+def _mask_compose(config) -> dict:
+    """A Compose configuration with the values that usually hold secrets replaced by ***: anything under
+    an environment / args / driver_opts / content key, wherever it is, and every value in the top-level
+    x-… extension blocks (often a shared environment, `x-env: &env {…}`)."""
+
+    def mask_all(value):
+        if isinstance(value, dict):
+            return {k: mask_all(v) for k, v in value.items()}
+        if isinstance(value, list):  # ["NAME=value", "NAME"] keeps its names
+            return [f"{x.partition('=')[0]}=***" if isinstance(x, str) and "=" in x else mask_all(x) if isinstance(x, (dict, list)) else "***" for x in value]
+        return "***" if value is not None else None
+
+    def mask_env(value):
+        # An environment list may name a variable without a value (["K"]: taken from the host): keep it.
+        if isinstance(value, list):
+            return [f"{x.partition('=')[0]}=***" if isinstance(x, str) and "=" in x else x if isinstance(x, str) else mask_all(x) for x in value]
+        return mask_all(value)
+
+    def walk(value):
+        if isinstance(value, dict):
+            return {
+                k: mask_env(v) if k == "environment" else mask_all(v) if k in _SECRET_KEYS or str(k).startswith("x-") else walk(v)
+                for k, v in value.items()
+            }
+        if isinstance(value, list):
+            return [walk(x) for x in value]
+        return value
+
+    # x-… extension fields are allowed at any level (a service's own `x-local: …` too): masked wherever they are.
+    return walk(config) if isinstance(config, dict) else {}
 
 
 @tool("read_compose_files", "compose", "read", "The Compose files of a project as they are on the server (up to 1 MB each). SSH engines only.", {"project": {"type": "string"}}, ("project",))
 async def read_compose_files(cx: Ctx, args: dict) -> str:
     meta = await _project_meta(cx, args.get("project"))
     _only_remote(cx, meta, "read the Compose files")
+    if not meta["configFiles"]:
+        raise ToolError("Pierside doesn't know where this project's Compose files are")
+    if not cx.profile.show_env():
+        # The files as written can hold secrets anywhere. Re-writing them with values masked would change
+        # them (YAML 1.1 reads 22:22 as a number, Compose's !reset tags don't parse): show what Compose
+        # reads from them instead, merged and masked like compose_config.
+        files = "\n".join(f"#   {p}" for p in meta["configFiles"])
+        return _cap(f"# The project's files, merged as Compose reads them (the raw files aren't shown while environment values are hidden):\n{files}\n" + await _masked_config(cx, meta))
     parts = []
     for path in meta["configFiles"]:
         code, out, err = await _on_host(cx, f"head -c {MAX_FILE_BYTES} -- {shlex.quote(path)}", 30)
         parts.append(f"# {path}\n" + (out if code == 0 else f"(can't read: {err.strip() or code})"))
-    if not parts:
-        raise ToolError("Pierside doesn't know where this project's Compose files are")
     return _cap("\n\n".join(parts))
 
 
@@ -2128,9 +2236,14 @@ _SYSTEM_IMAGES = ("rancher/mirrored-", "rancher/klipper-", "rancher/k3s", "ranch
 
 
 async def _image_prune_plan(cx: Ctx, everything: bool) -> list[dict]:
+    return await image_prune_plan(cx.get, everything)
+
+
+async def image_prune_plan(get, everything: bool) -> list[dict]:
     """Unused images a prune removes: {"kind": delete | untag | protected, "id", "tags", "remove", "kept", "size"}.
-    Without `everything` only untagged images. Images of extensions and Kubernetes are never removed."""
-    images, containers = await asyncio.gather(cx.get("images/json"), cx.get("containers/json", all="1"))
+    Without `everything` only untagged images. Images of extensions and Kubernetes are never removed.
+    `get(path, **params)` asks the engine (the Images page uses it too, for its "all unused" clean-up)."""
+    images, containers = await asyncio.gather(get("images/json"), get("containers/json", all="1"))
     used = {c.get("ImageID") for c in containers}
     # The engine also keeps a tag that a container was started by, even after the tag moved to
     # another image (tested: a prune left such a tag and only removed the image's other tags).
@@ -2140,7 +2253,7 @@ async def _image_prune_plan(cx: Ctx, everything: bool) -> list[dict]:
     for c in containers:
         ref = c.get("Image") or ""
         if ref.startswith("sha256:") or re.fullmatch(r"[0-9a-f]{12,64}", ref):
-            ref = ((await cx.get(f"containers/{c['Id']}/json")).get("Config") or {}).get("Image") or ""
+            ref = ((await get(f"containers/{c['Id']}/json")).get("Config") or {}).get("Image") or ""
         refs.add(ref)
     refs |= {r + ":latest" for r in refs if r and ":" not in r.rsplit("/", 1)[-1] and "@" not in r}
     plan = []
@@ -2390,6 +2503,15 @@ async def remove_stack(cx: Ctx, args: dict) -> str:
 
 
 _ENGINE_PROP = {"type": "string", "description": "Engine name or id from list_engines. Leave out for the connection's default engine."}
+
+
+def call_level(name: str, args: dict) -> str:
+    """A call's level for the confirm setting: a container with a host folder mounted can change the real
+    machine (a writable bind of e.g. the home folder), so run_container counts as destructive then."""
+    level = TOOLS[name].level
+    if name == "run_container" and any(str(spec).startswith("/") for spec in args.get("volumes") or []):
+        return "destroy"
+    return level
 
 
 def tool_definitions(profile: Profile) -> list[dict]:

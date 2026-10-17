@@ -28,12 +28,25 @@ On the Containers page, a container that is restarting or unhealthy also shows i
 
 A failing Swarm task is replaced by a new one each time, possibly on another node, so Pierside looks at the service's tasks instead of at single containers, twice a minute. It reports a service when the same task slot (for a global service: the same node) failed or was rejected three times within five minutes, and gives Swarm's reason, for example a non-zero exit code or an image that can't be found. Several replicas of a service each finishing once is not reported. This needs the active engine to be a Swarm manager.
 
+## Server alerts
+
+For an SSH engine, switch on **Alert me about this server** on its **Server performance** page. Pierside then checks that server every 30 seconds, whichever engine is active, and tells you when:
+
+- **memory is almost full** (less than 10 % available, on two checks in a row);
+- **it keeps swapping** (more than 1 MB/s on two checks in a row): memory is short, and everything slows down;
+- **the load stays high** (more than 1.5 per CPU over 5 minutes, on three checks in a row);
+- **a disk is almost full** (90 %, and as an error from 97 %).
+
+A short spike isn't reported. The same alert comes again after half an hour at the earliest, a full disk after six hours.
+
 ## Desktop notifications
 
 Click the version number in the bottom bar and switch on **Desktop notifications for container problems**. Pierside then also shows a notification of your operating system for each alert. Switching it on shows a sample, so you can see that it works on your computer.
 
 - **In Rancher Desktop** the notification is shown by Rancher Desktop itself. Its title is always "Warning" or "Error"; the text starts with "Pierside" and says what happened and on which engine. Clicking it does nothing. It appears for every alert, also while you are looking at Pierside.
 - **In the separate window** it is your browser's notification, which asks for permission once. Clicking it goes to the container's logs or the service. It appears only when the Pierside window isn't the one in front.
+
+With Pierside open in Rancher Desktop and in the separate window at the same time, each shows its own notification, so you get two.
 
 Alerts cover the engine that is active, and every engine you watch in the background (**Engines at a glance**, see [Remote engines](remote-engines.md#watching-an-engine-in-the-background)); an alert about another engine than the active one starts with its name. A watched engine that can't be reached is reported too, and again when it is back.
 

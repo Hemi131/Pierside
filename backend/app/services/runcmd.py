@@ -12,8 +12,9 @@ def _q(s: str) -> str:
     return shlex.quote(s)
 
 
-async def docker_run_command(cid: str, query=query_json) -> str:
-    """`query`: how to ask the engine (the MCP server passes its own engine's client)."""
+async def docker_run_command(cid: str, query=query_json, redact: bool = False) -> str:
+    """`query`: how to ask the engine (the MCP server passes its own engine's client). `redact`:
+    environment values become *** (masked before quoting, so a value with spaces is hidden whole)."""
     c = await query(f"containers/{cid}/json")
     cfg: dict[str, Any] = c.get("Config") or {}
     host: dict[str, Any] = c.get("HostConfig") or {}
@@ -48,8 +49,11 @@ async def docker_run_command(cid: str, query=query_json) -> str:
         suffix = "" if proto in ("", "tcp") else f"/{proto}"
         for b in bindings or [{}]:
             hip, hport = b.get("HostIp") or "", b.get("HostPort") or ""
-            spec = ":".join(x for x in (hip, hport) if x)
-            parts.append(f"-p {spec + ':' if spec else ''}{port}{suffix}")
+            if ":" in hip:
+                hip = f"[{hip}]"  # IPv6
+            # ip:hostPort:port, ip::port (any host port), hostPort:port, or port alone
+            spec = f"{hip}:{hport}:" if hip else f"{hport}:" if hport else ""
+            parts.append(f"-p {_q(spec + port + suffix)}")  # quoted when it has [ ] (IPv6): zsh would glob it
 
     for m in c.get("Mounts") or []:
         src = m.get("Name") if m.get("Type") == "volume" else m.get("Source")
@@ -61,6 +65,8 @@ async def docker_run_command(cid: str, query=query_json) -> str:
     image_env = set(icfg.get("Env") or [])
     for e in cfg.get("Env") or []:
         if e not in image_env:
+            if redact and "=" in e:
+                e = e.partition("=")[0] + "=***"
             parts.append(f"-e {_q(e)}")
 
     image_labels = icfg.get("Labels") or {}
@@ -78,14 +84,19 @@ async def docker_run_command(cid: str, query=query_json) -> str:
     if cfg.get("OpenStdin"):
         parts.append("-i")
 
+    # --entrypoint takes one word: the entrypoint's other words go after the image, before the command.
+    # Setting it also drops the image's default command, so then the whole command is written out.
     entry = cfg.get("Entrypoint") or []
+    cmd = cfg.get("Cmd") or []
+    args: list[str] = []
     if entry != (icfg.get("Entrypoint") or []):
-        parts.append(f"--entrypoint {_q(' '.join(entry))}")
+        parts.append(f"--entrypoint {_q(entry[0] if entry else '')}")
+        args = entry[1:] + cmd
+    elif cmd and cmd != (icfg.get("Cmd") or []):
+        args = cmd
 
     parts.append(_q(cfg.get("Image") or c.get("Image") or ""))
-
-    cmd = cfg.get("Cmd") or []
-    if cmd and cmd != (icfg.get("Cmd") or []):
-        parts.append(" ".join(_q(x) for x in cmd))
+    if args:
+        parts.append(" ".join(_q(x) for x in args))
 
     return " \\\n  ".join(parts)

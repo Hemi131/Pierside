@@ -1,5 +1,5 @@
 /** Toasts (in-app snackbars — Rancher's ddClient toasts are OS notifications) and confirm dialogs. */
-import { createContext, ReactNode, useCallback, useContext, useRef, useState } from "react";
+import { createContext, Fragment, ReactNode, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { Alert, Button, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Snackbar } from "@mui/material";
 
 type Severity = "success" | "info" | "warning" | "error";
@@ -35,7 +35,10 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
   const [queue, setQueue] = useState<Toast[]>([]);
   const [open, setOpen] = useState(true);
   const nextId = useRef(1);
-  const [dialog, setDialog] = useState<(ConfirmOptions & { resolve: (v: boolean) => void }) | null>(null);
+  // Questions wait their turn: one shown at a time, each answered in order (a second confirm used to
+  // replace the first, whose promise then never resolved).
+  const [dialogs, setDialogs] = useState<(ConfirmOptions & { id: number; resolve: (v: boolean) => void })[]>([]);
+  const dialog = dialogs[0] ?? null;
 
   const toast = useCallback((severity: Severity, message: string) => {
     setQueue((q) => [...q, { id: nextId.current++, severity, message }]);
@@ -43,13 +46,24 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const confirm = useCallback(
-    (opts: ConfirmOptions) => new Promise<boolean>((resolve) => setDialog({ ...opts, resolve })),
+    (opts: ConfirmOptions) =>
+      new Promise<boolean>((resolve) => {
+        const id = nextId.current++;
+        setDialogs((d) => [...d, { ...opts, id, resolve }]);
+      }),
     [],
   );
 
+  // When a question appeared: a click or a held Enter meant for the one before mustn't confirm it.
+  const shownAt = useRef(0);
+  useEffect(() => {
+    shownAt.current = Date.now();
+  }, [dialog]);
+
   const close = (v: boolean) => {
+    if (v && Date.now() - shownAt.current < 400) return;
     dialog?.resolve(v);
-    setDialog(null);
+    setDialogs((d) => d.slice(1));
   };
 
   const current = queue[0];
@@ -78,9 +92,22 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
           </Alert>
         ) : undefined}
       </Snackbar>
-      <Dialog open={!!dialog} onClose={() => close(false)} maxWidth="xs" fullWidth>
+      <Dialog
+        open={!!dialog}
+        onClose={() => close(false)}
+        maxWidth="xs"
+        fullWidth
+        // A held Enter repeats: only a fresh press may answer (or it would confirm the next question too).
+        onKeyDownCapture={(e) => {
+          if (e.key === "Enter" && e.repeat) {
+            e.preventDefault();
+            e.stopPropagation();
+          }
+        }}
+      >
         {dialog && (
-          <>
+          // Keyed per question: its buttons are new elements, not the previous question's.
+          <Fragment key={dialog.id}>
             <DialogTitle>{dialog.title}</DialogTitle>
             <DialogContent>
               <DialogContentText component="div">{dialog.message}</DialogContentText>
@@ -98,7 +125,7 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
                 {dialog.confirmLabel ?? "Confirm"}
               </Button>
             </DialogActions>
-          </>
+          </Fragment>
         )}
       </Dialog>
     </Ctx.Provider>

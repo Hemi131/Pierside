@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -10,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.config import WS_TOKEN, public_port
 from app.security import DEV_ORIGINS
-from app.routers import commands, compose, glance, containers, engines as engines_router, forwards as forwards_router, hostdisk, hostfs, images, mcp, networks, projects, standalone, swarm, system, volumes
+from app.routers import commands, compose, glance, hostperf, containers, engines as engines_router, forwards as forwards_router, hostdisk, hostfs, images, mcp, networks, projects, standalone, swarm, system, volumes
 from app.services.docker_client import close_docker, get_docker
 from app.services.engines import engines
 from app.services.hub import hub
@@ -82,10 +83,24 @@ async def ws_info():
 _diag_reports: list[dict] = []
 
 
+MAX_DIAG_BYTES = 16 * 1024
+
+
 @app.post("/diag")
-async def diag_report(report: dict):
-    """Diagnostics sink: the UI posts here so results can be read from the host (ui/src/diagnostics.ts)."""
-    _diag_reports.append(report)
+async def diag_report(request: Request):
+    """Diagnostics sink: the UI posts here so results can be read from the host (ui/src/diagnostics.ts).
+    It needs no token (errors can come before the UI has one), so its size is capped: the socket door
+    is reachable from the LAN."""
+    body = b""
+    async for chunk in request.stream():
+        body += chunk
+        if len(body) > MAX_DIAG_BYTES:
+            return JSONResponse(status_code=413, content={"detail": "Report too large"})
+    try:
+        report = json.loads(body or b"{}")
+    except ValueError:
+        return JSONResponse(status_code=400, content={"detail": "Not JSON"})
+    _diag_reports.append(report if isinstance(report, dict) else {"report": report})
     del _diag_reports[:-50]
     return {"ok": True}
 
@@ -110,6 +125,7 @@ app.include_router(engines_router.router)
 app.include_router(standalone.router)
 app.include_router(commands.router)
 app.include_router(glance.router)
+app.include_router(hostperf.router)
 app.include_router(mcp.router)
 app.include_router(mcp.admin)
 

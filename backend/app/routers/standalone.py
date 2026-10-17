@@ -18,6 +18,7 @@ from pydantic import BaseModel
 
 from app.config import WS_TOKEN, public_port
 from app.services.engines import DATA_DIR
+from app.services.store import write_json
 
 router = APIRouter(prefix="/standalone", tags=["standalone"])
 
@@ -73,11 +74,7 @@ async def put_prefs(prefs: dict):
     data = json.dumps(prefs)
     if len(data) > MAX_PREFS_BYTES:
         raise HTTPException(413, "Too many settings")
-    os.makedirs(DATA_DIR, exist_ok=True)
-    tmp = PREFS_FILE + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        f.write(data)
-    os.replace(tmp, PREFS_FILE)
+    write_json(PREFS_FILE, data)  # already serialised (its size was checked)
     return {"ok": True}
 
 

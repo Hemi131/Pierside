@@ -101,7 +101,7 @@ async def prune_unused(all: bool = True, extension: bool = False) -> dict:
     anonymous ones by default). Volumes of Rancher Desktop extensions are kept unless `extension` is
     set: they hold an extension's saved data (Pierside's own engines and SSH keys among them) and are
     unused whenever that extension isn't installed at the moment."""
-    await helper.remove_all_helpers()  # our browser helpers would keep volumes "in use"
+    await helper.remove_idle_volume_helpers()  # our browser helpers would keep volumes "in use"
     data, usage = await asyncio.gather(query_json("volumes"), _usage())
     volumes = [_normalise(v, usage.get(v["Name"], [])) for v in data.get("Volumes") or []]
     protected = [] if extension else [v for v in volumes if (v["project"] or "").startswith(EXTENSION_PREFIX)]

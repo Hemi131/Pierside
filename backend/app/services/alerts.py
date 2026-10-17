@@ -17,8 +17,9 @@ Docker waits longer between restarts each time (up to a minute), hence the wide 
 """
 
 import time
+import re
 from collections import deque
-from datetime import datetime, timezone
+from datetime import datetime
 
 LOOP_WINDOW_S = 5 * 60
 LOOP_DEATHS = 3
@@ -132,6 +133,54 @@ class Alerts:
         return out
 
 
+MEMORY_LOW = 0.10  # available share of RAM below this…
+SWAP_BYTES_S = 1024 * 1024  # …swapping faster than this…
+LOAD_PER_CPU = 1.5  # …or a 5-minute load above this per CPU, on several checks in a row, is reported
+DISK_FULL, DISK_CRITICAL = 90.0, 97.0  # percent of a filesystem
+REPEAT_SERVER_S = 30 * 60
+REPEAT_DISK_S = 6 * 3600
+
+
+class ServerRules:
+    """Server alerts of one SSH engine (watched with "Alert me about this server"), from one check of its
+    whole-server figures every half minute or so. A short spike isn't reported: memory and swapping must
+    show on two checks in a row, load on three."""
+
+    def __init__(self) -> None:
+        self._streak: dict[str, int] = {}
+        self._last: dict[str, float] = {}
+
+    def _once(self, key: str, every: float, now: float) -> bool:
+        if key in self._last and now - self._last[key] < every:
+            return False
+        self._last[key] = now
+        return True
+
+    def _held(self, key: str, condition: bool, checks: int) -> bool:
+        self._streak[key] = self._streak.get(key, 0) + 1 if condition else 0
+        return self._streak[key] >= checks
+
+    def check(self, server: str, mem: dict, swap_rate: float, load5: float, cpus: int, filesystems: list[dict], now: float | None = None) -> list[dict]:
+        """mem: total / available bytes; swap_rate: bytes per second; filesystems: parse_df rows."""
+        now = time.time() if now is None else now
+        out = []
+        total = mem.get("total") or 0
+        if total and self._held("memory", mem.get("available", 0) / total < MEMORY_LOW, 2) and self._once("memory", REPEAT_SERVER_S, now):
+            pct = mem.get("available", 0) * 100 // total
+            out.append(_alert("server-memory", "error", server, "", f'Server "{server}": memory is almost full ({pct} % available). Server performance shows what uses it.'))
+        if self._held("swap", swap_rate > SWAP_BYTES_S, 2) and self._once("swap", REPEAT_SERVER_S, now):
+            out.append(_alert("server-swap", "warning", server, "", f'Server "{server}": it is swapping ({swap_rate / 1048576:.1f} MB/s), so memory is short and processes are slowed down.'))
+        if cpus and self._held("load", load5 > cpus * LOAD_PER_CPU, 3) and self._once("load", REPEAT_SERVER_S, now):
+            out.append(_alert("server-load", "warning", server, "", f'Server "{server}": high load ({load5:.1f} over 5 minutes on {cpus} CPUs); processes are waiting for their turn.'))
+        for fs in filesystems:
+            pct = fs.get("percent") or 0
+            severity = "error" if pct >= DISK_CRITICAL else "warning"
+            # Per severity: a disk that was reported at 91 % is reported again when it reaches 97 %.
+            if pct >= DISK_FULL and self._once(f"disk:{fs['mount']}:{severity}", REPEAT_DISK_S, now):
+                out.append(_alert("server-disk", severity, server, "", f'Server "{server}": the disk at {fs["mount"]} is {pct:g} % full. Server disk shows what takes the space.'))
+        return out
+
+
 def docker_restarts(policy: str | None, exit_code: str) -> bool:
     """Whether Docker restarts a container with this restart policy after this exit."""
     if policy in ("always", "unless-stopped"):
@@ -158,15 +207,21 @@ def _alert(kind: str, severity: str, name: str, cid: str, message: str) -> dict:
     return {"kind": kind, "severity": severity, "name": name, "containerId": cid, "message": message, "at": time.time()}
 
 
+_RFC3339 = re.compile(r"(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d)(?:\.(\d+))?(Z|[+-]\d\d:\d\d)?")
+
+
 def _timestamp(text: str | None) -> float | None:
-    """Docker's RFC 3339 time with nanoseconds -> epoch seconds."""
-    if not text:
+    """Docker's RFC 3339 time with nanoseconds and an offset -> epoch seconds. The offset matters:
+    `info.SystemTime` carries the daemon's local one (e.g. +02:00), task times are in UTC."""
+    m = _RFC3339.fullmatch((text or "").strip())
+    if not m:
         return None
-    head, _, frac = text.rstrip("Z").partition(".")
+    head, frac, offset = m.groups()
     try:
-        return datetime.fromisoformat(head).replace(tzinfo=timezone.utc).timestamp() + (float("0." + frac[:6]) if frac[:6].isdigit() else 0.0)
+        when = datetime.fromisoformat(head + ("+00:00" if offset in (None, "Z") else offset))
     except ValueError:
         return None
+    return when.timestamp() + (float("0." + frac[:6]) if frac else 0.0)
 
 
 alerts = Alerts()

@@ -107,6 +107,15 @@ function DockerConsole() {
     term?.write("\x1b[2mDocker console: runs docker commands on the local engine through Rancher, like a terminal would.\r\n" + "Type a command without the leading `docker`, e.g. `ps -a` or `compose ls`.\x1b[0m\r\n");
   }, [term]);
 
+  // Closing the panel stops what still runs (`logs -f`, `stats`), as closing a terminal would.
+  useEffect(
+    () => () => {
+      proc.current?.close();
+      proc.current = null;
+    },
+    [],
+  );
+
   const run = () => {
     const text = line.trim().replace(/^docker\s+/, "");
     if (!text || running || !term) return;

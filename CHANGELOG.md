@@ -4,6 +4,31 @@ Each release of Pierside, newest first. Install a specific one with `rdctl exten
 
 ## Unreleased
 
+## 1.3.0 - 2026-10-17
+
+- **Server performance** (SSH engines, in the bottom bar): like `htop` for the server, with the container of each process. CPU, memory, disks and network with 10-minute charts, a note when something stands out (low memory, swapping, waiting for the disk, high load), and the processes sorted by CPU, memory or disk I/O, or grouped by container. Processes can be ended, forced to end or given a lower priority. Nothing has to be installed on the server.
+- **Server alerts:** switch on **Alert me about this server** to be told when an SSH server's memory is almost full, it keeps swapping, its load stays high, or a disk is almost full, checked every 30 seconds whichever engine is active.
+- **Security:** a request to Pierside's local port that claimed to come from a development web page (`Origin: http://localhost:3000`) was let in without the session token, so any program on your computer, or a web page served on that port, could get full access to Docker through it. Every request now needs the token.
+- **Security:** AI access accepted names such as `../containers/x` for images and networks, which reached other parts of the Docker API: an assistant could delete a container outside its scope or put a container on the host's network. Such names are refused now.
+- Fixed: AI access could start a container on the host's network when given that network's ID instead of its name.
+- Fixed: switching off **Watch in the background** (or removing a watched engine) left its connection open and could stop the page from updating.
+- Fixed: an unreachable engine could make healthy watched engines look unreachable too.
+- **AI access:** environment values with spaces were only partly hidden in `container_run_command`, and `compose_config` / `read_compose_files` showed secrets; with "Show environment values" off, variables are no longer filled in, values in environment, build arguments, driver options, inline contents and `x-` blocks are hidden, and `read_compose_files` shows the merged configuration instead of the raw files. A volume used by containers outside a connection's scope is no longer visible to it, and lists name only the containers it shares. Starting a container with a host folder mounted now counts as destructive for "ask before destructive actions".
+- Fixed: Swarm "task keeps failing" alerts never came on servers whose clock isn't set to UTC.
+- Fixed: Engines at a glance showed 0 CPU / memory for engines with many containers (now what could be measured, marked "≥"), counted Kubernetes' and Pierside's own containers on the active engine, and could call a container "restarting" hours after it stopped.
+- Fixed: switching engines removed Pierside's helper containers on the new engine instead of the old one, and left shells of the old engine running.
+- Fixed: pruning volumes stopped running file downloads, Server files and disk measurements and debug shells.
+- Fixed: after a brief connection drop (e.g. an SSH hiccup), logs repeated up to 1000 lines; a single failed check could mark a container "removed". Merged Compose logs now also start in time order across slow and fast services.
+- Fixed: **Images → Clean up → All unused** also deleted the images of Rancher Desktop, Kubernetes and extensions without a running container.
+- Fixed: Swarm stack delete reported success when nothing could be deleted; Compose **Start all** also started `docker compose run` one-off containers; **Copy docker run command** wrote an invalid `-p 127.0.0.1:80` for ports with any host port and quoted a multi-word entrypoint as one word.
+- Fixed: a settings file that couldn't be read (engines, port forwards) was overwritten empty on the next change; it is now kept as a copy.
+- Fixed: a second confirmation (e.g. two port conflicts when starting several containers) replaced the first, and the action then never finished.
+- Fixed: in a file browser, a file that loaded slowly could show up, and be saved, under the name of the file clicked after it.
+- Fixed: pausing a container ended its Exec shell and dropped unsaved changes in its Files tab; both now carry on after Resume.
+- Fixed: logs of a container with a terminal (TTY) could clear or switch the log view's screen; only colours and links are kept from such codes now.
+- Fixed: removing an AI connection that was set up "for this project folder only" left it registered in the assistant (for connections set up from now on).
+- Fixed: closing the bottom Docker console left commands such as `logs -f` running; Ctrl+F no longer takes the key from a shell (vim, less); Images: deleting from an image's page warns about Rancher Desktop's images and removes only the tag shown; IPv6 port links; Swarm secrets and configs show load errors instead of spinning; cancelling a Compose run right after starting it works; lists catch up after the live connection was briefly lost.
+
 ## 1.2.0 - 2026-10-15
 
 - **Engines at a glance** is its own page now, opened from the second line of the engine switcher at the top of the sidebar. It keeps itself up to date (every 30 seconds by default; 10 seconds to 5 minutes, or only on Refresh), shows the CPU and memory each engine's containers use, and a click on a problem opens the container on its engine.

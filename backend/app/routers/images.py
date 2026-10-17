@@ -122,10 +122,32 @@ async def pull_image(body: PullBody):
 
 @router.post("/prune")
 async def prune_images(mode: Literal["dangling", "unused"] = "dangling"):
-    filters = json.dumps({"dangling": ["false" if mode == "unused" else "true"]})
-    res = await query_json("images/prune", method="POST", params={"filters": filters})
-    deleted = [d.get("Deleted") or d.get("Untagged") for d in res.get("ImagesDeleted") or []]
-    return {"deleted": [d for d in deleted if d], "spaceReclaimed": res.get("SpaceReclaimed", 0)}
+    if mode == "dangling":
+        # Untagged images only: extension and Kubernetes images are always tagged, so the engine's prune is safe.
+        res = await query_json("images/prune", method="POST", params={"filters": json.dumps({"dangling": ["true"]})})
+        deleted = [d.get("Deleted") or d.get("Untagged") for d in res.get("ImagesDeleted") or []]
+        return {"deleted": [d for d in deleted if d], "spaceReclaimed": res.get("SpaceReclaimed", 0)}
+    # All unused: image by image, like AI access's prune. The engine's own prune would also take the
+    # images of Rancher Desktop, Kubernetes and extensions that have no container (UI-only ones).
+    from app.services.mcp_tools import image_prune_plan  # late: the tools module is large
+
+    async def get(path: str, **params):
+        return await query_json(path, params=params or None)
+
+    deleted, failed, reclaimed = [], [], 0
+    plan = await image_prune_plan(get, True)
+    for e in plan:
+        if e["kind"] not in ("delete", "untag"):
+            continue
+        try:
+            for ref in e["remove"]:  # the last tag going removes the image (never forced)
+                await query_json(f"images/{ref}", method="DELETE")
+            deleted.append(", ".join(e["remove"]) if e["tags"] else e["id"])
+            reclaimed += (e["size"] or 0) if e["kind"] == "delete" else 0
+        except aiodocker.DockerError as err:
+            failed.append(f"{', '.join(e['tags']) or e['id']}: {err.message}")
+    kept = [", ".join(e["tags"]) or e["id"] for e in plan if e["kind"] == "protected"]
+    return {"deleted": deleted, "spaceReclaimed": reclaimed, "failed": failed, "kept": kept}
 
 
 @router.delete("/{ref:path}")

@@ -12,7 +12,7 @@ import { openExternal } from "../../api/ddclient";
 import { useColumnLayout } from "../../components/table/useColumnLayout";
 import { usePortHost } from "../../hooks/useEngine";
 import { href, navigate } from "../../hooks/useRoute";
-import { relativeTime } from "../../utils/format";
+import { urlHost, relativeTime } from "../../utils/format";
 import { ScaleDialog, useSwarmActions } from "./useSwarmActions";
 import { shortServiceName, SwarmPort, SwarmService } from "./types";
 
@@ -46,7 +46,7 @@ export function SwarmPorts({ ports }: { ports: SwarmPort[] }) {
             underline="hover"
             onClick={(e) => {
               e.stopPropagation();
-              openExternal(`http://${portHost}:${p.published}`);
+              openExternal(`http://${urlHost(portHost)}:${p.published}`);
             }}
             sx={{ display: "inline-flex", alignItems: "center", gap: 0.25, fontSize: 13 }}
           >

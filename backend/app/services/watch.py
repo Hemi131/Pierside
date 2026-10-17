@@ -28,9 +28,10 @@ from collections import deque
 import aiodocker
 
 from app.services import docker_client
-from app.services.alerts import Alerts, _timestamp, confirm
+from app.services.alerts import Alerts, ServerRules, _timestamp, confirm
 from app.services.engines import DATA_DIR, engines
 from app.services.mcp_access import EngineClients
+from app.services.store import write_json
 
 log = logging.getLogger("pierside.watch")
 
@@ -41,9 +42,11 @@ VIEW_TTL_S = 15  # the page reads GET /glance every few seconds; this long after
 IDLE_CLOSE_S = 600  # connection of an engine that is neither watched nor looked at
 TIMEOUT_S = 20
 SWARM_WATCH_S = 30.0
+SERVER_CHECK_S = 30.0  # server alerts: how often memory / swap / load / disks are looked at
 DOWN_AFTER_FAILURES = 2  # failed connection attempts in a row before a watched engine is reported
 STATS_CONCURRENCY = 6
 STATS_MAX_CONTAINERS = 100
+SAMPLE_TIMEOUT_S = 5
 
 _RECENTLY = re.compile(r"Exited \((\d+)\) .*(second|minute|hour)s? ago|Exited \((\d+)\) Less than")
 _UNHEALTHY = "(unhealthy)"
@@ -59,7 +62,9 @@ async def overview(docker: aiodocker.Docker) -> tuple[dict, list[str]]:
     mine = [c for c in raw if not _protected(c)]  # without Pierside's, other extensions' and Kubernetes' containers
     # A container in a restart loop is "restarting" only between two attempts; in between it looks
     # freshly started or just exited. Those few are asked how often Docker has restarted them.
-    maybe = [c for c in mine if c.get("State") == "restarting" or _JUST_STARTED.match(c.get("Status") or "") or _RECENTLY.match(c.get("Status") or "")][:20]
+    # (Not ones that exited: Docker keeps RestartCount, so a container that looped hours ago and stopped
+    # would still count. Those show as "exited with code …" below.)
+    maybe = [c for c in mine if c.get("State") == "restarting" or _JUST_STARTED.match(c.get("Status") or "")][:20]
 
     async def restarts(c: dict) -> tuple[str, int]:
         try:
@@ -103,32 +108,34 @@ async def overview(docker: aiodocker.Docker) -> tuple[dict, list[str]]:
     return out, [c["Id"] for c in mine if c.get("State") == "running"]
 
 
-async def usage(docker: aiodocker.Docker, running: list[str]) -> tuple[float, int]:
+async def usage(docker: aiodocker.Docker, running: list[str]) -> tuple[float, int, bool]:
     """CPU (100 = one core) and memory used by these containers, from one stats sample each
-    (Docker takes about a second per sample, so a few at a time)."""
+    (Docker takes about a second per sample, so a few at a time, each with its own time limit).
+    The third value says some samples are missing (failed, too slow, or past the first 100)."""
     from app.services.hub import cpu_percent, mem_usage
 
     sem = asyncio.Semaphore(STATS_CONCURRENCY)
 
-    async def one(cid: str) -> tuple[float, int]:
+    async def one(cid: str) -> tuple[float, int] | None:
         async with sem:
             try:
-                s = await docker._query_json(f"containers/{cid}/stats", params={"stream": "false"})
+                s = await asyncio.wait_for(docker._query_json(f"containers/{cid}/stats", params={"stream": "false"}), SAMPLE_TIMEOUT_S)
             except Exception:
-                return 0.0, 0
+                return None
             return cpu_percent(s), mem_usage(s)[0]
 
-    try:
-        samples = await asyncio.wait_for(asyncio.gather(*(one(c) for c in running[:STATS_MAX_CONTAINERS])), TIMEOUT_S)
-    except asyncio.TimeoutError:
-        return 0.0, 0
-    return round(sum(c for c, _ in samples), 2), sum(m for _, m in samples)
+    samples = await asyncio.gather(*(one(c) for c in running[:STATS_MAX_CONTAINERS]))
+    got = [s for s in samples if s is not None]
+    partial = len(got) < len(running)
+    return round(sum(c for c, _ in got), 2), sum(m for _, m in got), partial
 
 
 class Watch:
     def __init__(self) -> None:
         self.interval = DEFAULT_INTERVAL
         self.background: list[str] = []
+        self.server_alerts: list[str] = []  # SSH engines whose server is checked for memory / swap / load / disk
+        self._server_checks: dict[str, asyncio.Task] = {}
         self.snaps: dict[str, dict] = {}
         self.recent: deque[dict] = deque(maxlen=100)
         self._viewed = 0.0
@@ -155,15 +162,12 @@ class Watch:
         if data.get("interval") in INTERVALS:
             self.interval = data["interval"]
         self.background = [str(x) for x in data.get("background") or []]
+        self.server_alerts = [str(x) for x in data.get("serverAlerts") or []]
 
     def _save(self) -> None:
-        os.makedirs(DATA_DIR, exist_ok=True)
-        tmp = SETTINGS_FILE + ".tmp"
-        with open(tmp, "w", encoding="utf-8") as f:
-            json.dump({"interval": self.interval, "background": self.background}, f)
-        os.replace(tmp, SETTINGS_FILE)
+        write_json(SETTINGS_FILE, {"interval": self.interval, "background": self.background, "serverAlerts": self.server_alerts}, indent=None)
 
-    def configure(self, interval: int | None = None, watch: dict[str, bool] | None = None) -> None:
+    def configure(self, interval: int | None = None, watch: dict[str, bool] | None = None, server_alerts: dict[str, bool] | None = None) -> None:
         if interval is not None:
             if interval not in INTERVALS:
                 raise ValueError(f"interval must be one of {INTERVALS}")
@@ -173,6 +177,13 @@ class Watch:
                 self.background.append(engine_id)
             elif not on and engine_id in self.background:
                 self.background.remove(engine_id)
+        for engine_id, on in (server_alerts or {}).items():
+            if on and engine_id not in self.server_alerts:
+                if engine_id not in {e["id"] for e in engines.list() if e["type"] == "ssh"}:
+                    raise ValueError("Server alerts are for SSH engines")
+                self.server_alerts.append(engine_id)
+            elif not on and engine_id in self.server_alerts:
+                self.server_alerts.remove(engine_id)
         self._save()
         self._wake.set()
 
@@ -184,8 +195,8 @@ class Watch:
             self._task = asyncio.create_task(self._loop(), name="watch")
 
     async def stop(self) -> None:
-        tasks = [t for t in [self._task, *self._followers.values()] if t]
-        self._task, self._followers = None, {}
+        tasks = [t for t in [self._task, *self._followers.values(), *self._server_checks.values()] if t]
+        self._task, self._followers, self._server_checks = None, {}, {}
         for t in tasks:
             t.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
@@ -201,6 +212,21 @@ class Watch:
     def refresh(self) -> None:
         self._forced = {e["id"] for e in engines.list()}
         self._wake.set()
+
+    async def forget(self, engine_id: str) -> None:
+        """An engine was removed: stop following it and close its connection now."""
+        for tasks in (self._followers, self._server_checks):
+            task = tasks.pop(engine_id, None)
+            if task:
+                task.cancel()
+        self._down.discard(engine_id)
+        self.snaps.pop(engine_id, None)
+        self._used.pop(engine_id, None)
+        if engine_id in self.background or engine_id in self.server_alerts:
+            self.background = [i for i in self.background if i != engine_id]
+            self.server_alerts = [i for i in self.server_alerts if i != engine_id]
+            self._save()
+        await self._clients.close(engine_id)
 
     def covers(self, engine_id: str) -> bool:
         """Whether this module reports the engine's alerts itself."""
@@ -288,7 +314,9 @@ class Watch:
                 asyncio.create_task(self._poll(engine_id), name=f"watch-poll-{engine_id}")
         # Connections of engines nobody looks at or watches any more, or that were removed.
         for engine_id, used in list(self._used.items()):
-            if engine_id not in ids or (engine_id not in self.background and engine_id not in self._polling and now - used > IDLE_CLOSE_S):
+            if engine_id not in ids or (
+                engine_id not in self.background and engine_id not in self.server_alerts and engine_id not in self._polling and now - used > IDLE_CLOSE_S
+            ):
                 self._used.pop(engine_id, None)
                 await self._clients.close(engine_id)
 
@@ -302,22 +330,30 @@ class Watch:
         try:
             docker = await self._docker_for(engine_id)
             snap, running = await overview(docker)
-            snap["cpu"], snap["mem"] = await self._usage(engine_id, docker, running)
+            # Counts and problems take a moment, CPU and memory several seconds (a sample per container):
+            # show the first right away, with the previous CPU / memory (if any) until the new ones are in.
+            prev = self.snaps.get(engine_id) or {}
+            self.snaps[engine_id] = {**snap, "cpu": prev.get("cpu"), "mem": prev.get("mem"), "usagePartial": prev.get("usagePartial"), "updatedAt": time.time()}
+            snap["cpu"], snap["mem"], snap["usagePartial"] = await self._usage(engine_id, docker, running)
         except Exception as e:
-            if engine_id != engines.active_id:
+            # A followed engine's connection belongs to its event follower, which reconnects by itself;
+            # dropping it here would also cut the event stream (and lose the events in the gap).
+            if engine_id != engines.active_id and not self.covers(engine_id):
                 await self._clients.drop(engine_id)
             snap = {"reachable": False, "error": (str(e) or type(e).__name__)[:300]}
         finally:
             self._polling.discard(engine_id)
         self.snaps[engine_id] = {**snap, "updatedAt": time.time()}
 
-    async def _usage(self, engine_id: str, docker: aiodocker.Docker, running: list[str]) -> tuple[float, int]:
+    async def _usage(self, engine_id: str, docker: aiodocker.Docker, running: list[str]) -> tuple[float, int, bool]:
         from app.services.hub import hub
 
-        # The active engine's stats are streamed anyway while a page is open: use those.
-        fresh = [s for s in hub.stats.values() if time.time() - s.get("t", 0) < 10]
+        # The active engine's stats are streamed anyway while a page is open: use those, for the same
+        # containers as on any other engine (`running` leaves out Kubernetes, extensions and Pierside's).
+        ids = set(running)
+        fresh = [s for cid, s in hub.stats.items() if cid in ids and time.time() - s.get("t", 0) < 10]
         if engine_id == engines.active_id and hub.clients and fresh:
-            return round(sum(s["cpu"] for s in fresh), 2), sum(s["mem"] for s in fresh)
+            return round(sum(s["cpu"] for s in fresh), 2), sum(s["mem"] for s in fresh), len(fresh) < len(ids)
         return await usage(docker, running)
 
     # ---- following watched engines -----------------------------------------------------------
@@ -327,9 +363,62 @@ class Watch:
             if engine_id not in wanted:
                 self._followers.pop(engine_id).cancel()
                 self._down.discard(engine_id)
-                asyncio.create_task(self._clients.close(engine_id))
+                if engine_id not in self.server_alerts:  # still used for the server checks otherwise
+                    asyncio.create_task(self._clients.close(engine_id))
         for engine_id in wanted - self._followers.keys():
             self._followers[engine_id] = asyncio.create_task(self._follow(engine_id), name=f"watch-follow-{engine_id}")
+        # Server alerts: one check task per SSH engine that has them switched on.
+        checked = {i for i in self.server_alerts if i in ids}
+        for engine_id in list(self._server_checks):
+            if engine_id not in checked:
+                self._server_checks.pop(engine_id).cancel()
+                if engine_id not in self.background:
+                    asyncio.create_task(self._clients.close(engine_id))
+        for engine_id in checked - self._server_checks.keys():
+            self._server_checks[engine_id] = asyncio.create_task(self._check_server(engine_id), name=f"watch-server-{engine_id}")
+
+    async def _check_server(self, engine_id: str) -> None:
+        """Every SERVER_CHECK_S: the server's memory, swapping, load and disks (ServerRules), over this
+        module's own SSH connection to it, whichever engine is active."""
+        from app.services.hostdisk import DF_COMMAND, parse_df
+        from app.services.hostperf import SYSTEM_SCRIPT, _sections, new_marker, parse_system, with_marker
+
+        rules = ServerRules()
+        prev_vm: dict | None = None
+        prev_at = 0.0
+        while True:
+            try:
+                conn = await asyncio.wait_for(self._clients.ssh(engine_id), TIMEOUT_S)
+                # The script on stdin, with its own marker (see hostperf: never in a command line).
+                marker = new_marker()
+                script = with_marker(marker, SYSTEM_SCRIPT + "\nmark df; " + DF_COMMAND)
+                result = await asyncio.wait_for(conn.run("sh -s", input=script, check=False), TIMEOUT_S)
+                out = result.stdout
+                text = out if isinstance(out, str) else (out or b"").decode("utf-8", "replace")
+                sec = _sections(text, marker)
+                system = parse_system(sec)
+                now = time.monotonic()
+                swap_rate = 0.0
+                if prev_vm is not None and now > prev_at:
+                    pages = sum(max(0, system["vm"].get(k, 0) - prev_vm.get(k, 0)) for k in ("pswpin", "pswpout"))
+                    swap_rate = pages * system["page"] / (now - prev_at)
+                prev_vm, prev_at = system["vm"], now
+                mem = system["mem"]
+                memory = {"total": mem.get("MemTotal", 0), "available": mem.get("MemAvailable", mem.get("MemFree", 0))}
+                cpus = len([k for k in system["cpus"] if k != "cpu"])
+                name = next((e["name"] for e in engines.list() if e["id"] == engine_id), engine_id)
+                # parse_df skips the first line (df's header); the section starts with df's own header.
+                for problem in rules.check(name, memory, swap_rate, system["load"][1], cpus, parse_df(sec.get("df", ""))):
+                    self.emit(engine_id, problem)
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                log.info("server check %s: %s", engine_id, e)  # an unreachable server is the follower's to report
+                # A followed engine's connection belongs to its event follower (which reconnects itself):
+                # dropping it here would cut the event stream every time a check fails.
+                if not self.covers(engine_id):
+                    await self._clients.drop(engine_id)
+            await asyncio.sleep(SERVER_CHECK_S)
 
     async def _follow(self, engine_id: str) -> None:
         rules = Alerts()

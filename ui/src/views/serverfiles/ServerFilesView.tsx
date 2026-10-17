@@ -3,7 +3,7 @@
  * a helper container where those rights aren't enough and the user agreed to that for this server
  * (backend services/hostfs.py). The file browser is the same one containers and volumes use.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Box, Button, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, Switch, Tooltip, Typography } from "@mui/material";
 import ViewInArOutlinedIcon from "@mui/icons-material/ViewInArOutlined";
 import PersonOutlineIcon from "@mui/icons-material/PersonOutline";
@@ -40,6 +40,7 @@ export function ServerFilesView({ path }: { path?: string }) {
   const [error, setError] = useState<string | null>(null);
   const [via, setVia] = useState<"ssh" | "docker" | null>(null);
   const [question, setQuestion] = useState<Question | null>(null);
+  const asking = useRef<Promise<boolean> | null>(null);
 
   useEffect(() => {
     setState(null);
@@ -83,9 +84,15 @@ export function ServerFilesView({ path }: { path?: string }) {
       onDenied: async (e) => {
         const detail = e instanceof ApiError ? (e.detail as { needsConsent?: boolean; path?: string; user?: string } | undefined) : undefined;
         if (!detail?.needsConsent) return false;
-        const allow = await new Promise<boolean>((answer) => setQuestion({ path: detail.path ?? "", user: detail.user ?? "", answer }));
-        setQuestion(null);
-        return (await setUseDocker(allow)) && allow;
+        // Several requests can be denied at once: they all wait for the one question (a second one
+        // used to replace the first, whose answer then never came).
+        asking.current ??= new Promise<boolean>((answer) => setQuestion({ path: detail.path ?? "", user: detail.user ?? "", answer })).then(async (allow) => {
+          setQuestion(null);
+          const ok = (await setUseDocker(allow)) && allow;
+          asking.current = null;
+          return ok;
+        });
+        return asking.current;
       },
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -29,6 +29,7 @@ from app.services.docker_client import get_docker, query_json
 from app.services.engines import DATA_DIR, engines
 from app.services.fsbrowse import FsError
 from app.services.helper import HELPER_IMAGE, HELPER_LABEL, _ensure_image, _remove, busy, lease
+from app.services.store import write_json
 
 log = logging.getLogger("pierside.hostfs")
 
@@ -89,10 +90,7 @@ def consent() -> bool | None:
 def set_consent(allow: bool) -> None:
     data = _load()
     data[engine_id()] = allow
-    os.makedirs(DATA_DIR, exist_ok=True)
-    with open(STORE + ".tmp", "w", encoding="utf-8") as f:
-        json.dump(data, f)
-    os.replace(STORE + ".tmp", STORE)
+    write_json(STORE, data, indent=None)
 
 
 async def docker_problem() -> str | None:
@@ -161,24 +159,68 @@ async def _create(folder: str, writable: bool) -> str:
     return c.id
 
 
+async def _mount_point(folder: str) -> tuple[str, str]:
+    """What to bind-mount for `folder`: (the folder or the nearest folder above it whose real path the SSH
+    user can resolve, that real path). Docker follows symbolic links in a bind source, so a link to /
+    (say in another user's home) would mount the whole server: the resolved path is checked and mounted.
+    Where the SSH user can't resolve the folder (a parent it may not enter), a folder above it is mounted
+    instead; the rest of the path is then followed inside the helper, where a link leads into the
+    helper's own filesystem, not the server's."""
+    _mountable(folder)
+    candidate = folder
+    while True:
+        code, out, _err = await ssh_run(["readlink", "-f", "--", candidate])
+        real = out.decode("utf-8", "replace").rstrip("\n") if code == 0 else ""  # a name may end in a space
+        if real.startswith("/"):
+            _mountable(candidate)
+            _mountable(real)
+            return candidate, real
+        if candidate == "/":
+            raise FsError("Pierside can't tell where this folder really is, so it doesn't mount it", 403)
+        candidate = posixpath.dirname(candidate)
+
+
+async def _running_helper(eid: str, folder: str, writable: bool) -> tuple[str, str] | None:
+    """An existing helper that has `folder` or a folder above it mounted (call with _lock held)."""
+    for (e, mounted, w), (cid, _last) in sorted(_helpers.items(), key=lambda kv: -len(kv[0][1])):
+        if e == eid and w == writable and (folder == mounted or folder.startswith(mounted + "/")):
+            try:
+                if ((await query_json(f"containers/{cid}/json")).get("State") or {}).get("Running"):
+                    _helpers[(e, mounted, w)] = (cid, time.monotonic())
+                    return cid, mounted
+            except aiodocker.DockerError:
+                pass
+            _helpers.pop((e, mounted, w), None)
+    return None
+
+
 async def _helper(folder: str, writable: bool) -> tuple[str, str]:
     """A running helper that has `folder` (or a folder above it) mounted: (container id, mounted folder)."""
     _mountable(folder)
     eid = engine_id()
     async with _lock:
         _start_reaper()
-        for (e, mounted, w), (cid, _last) in sorted(_helpers.items(), key=lambda kv: -len(kv[0][1])):
-            if e == eid and w == writable and (folder == mounted or folder.startswith(mounted + "/")):
-                try:
-                    if ((await query_json(f"containers/{cid}/json")).get("State") or {}).get("Running"):
-                        _helpers[(e, mounted, w)] = (cid, time.monotonic())
-                        return cid, mounted
-                except aiodocker.DockerError:
-                    pass
-                _helpers.pop((e, mounted, w), None)
-        cid = await _create(folder, writable)
-        _helpers[(eid, folder, writable)] = (cid, time.monotonic())
-        return cid, folder
+        found = await _running_helper(eid, folder, writable)
+    if found is None:
+        # A new mount, of the real path (no symbolic link left in it to swap or follow). Resolving it
+        # takes SSH round trips: not while holding the lock, which every other request waits for.
+        mounted, real = await _mount_point(folder)
+        async with _lock:
+            found = await _running_helper(eid, folder, writable)  # made by another request meanwhile?
+            if found is None:
+                cid = await _create(real, writable)
+                _helpers[(eid, mounted, writable)] = (cid, time.monotonic())
+                found = (cid, mounted)
+    cid, mounted = found
+    if mounted != folder:
+        # The rest of the path is followed inside the helper: a link there that leads out of the mount
+        # would show the helper's own files as if they were the server's.
+        inner = MOUNT + _inside(mounted, folder) if _inside(mounted, folder) != "/" else MOUNT
+        code, out, _err = await fsbrowse._exec(cid, ["readlink", "-f", "--", inner])
+        real = out.decode("utf-8", "replace").rstrip("\n")
+        if code == 0 and real and not (real == MOUNT or real.startswith(MOUNT + "/")):
+            raise FsError(f"{folder} is a link that leads outside the folder Pierside could mount, so it can't be followed here", 403)
+    return cid, mounted
 
 
 def _inside(mounted: str, path: str) -> str:

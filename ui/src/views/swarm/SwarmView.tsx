@@ -250,12 +250,14 @@ function ObjectsTab() {
     }
     void (kind === "secrets" ? secrets.reload() : configs.reload());
   };
-  const table = (title: string, kind: "secrets" | "configs", items: SwarmObject[] | null) => (
+  const table = (title: string, kind: "secrets" | "configs", items: SwarmObject[] | null, error: string | null) => (
     <Box sx={{ mb: 3 }}>
       <Typography variant="h4" sx={{ mb: 1 }}>
         {title}
       </Typography>
-      {items === null ? (
+      {items === null && error ? (
+        <Alert severity="error">{error}</Alert>
+      ) : items === null ? (
         <CircularProgress size={20} />
       ) : items.length === 0 ? (
         <Typography color="text.secondary">None.</Typography>
@@ -293,8 +295,8 @@ function ObjectsTab() {
   );
   return (
     <Box sx={{ overflow: "auto" }}>
-      {table("Secrets", "secrets", secrets.data)}
-      {table("Configs", "configs", configs.data)}
+      {table("Secrets", "secrets", secrets.data, secrets.error)}
+      {table("Configs", "configs", configs.data, configs.error)}
     </Box>
   );
 }

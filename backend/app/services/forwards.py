@@ -30,6 +30,7 @@ from urllib.parse import quote
 import aiodocker
 
 from app.services.engines import DATA_DIR, LOCAL_ID, LOCAL_URL, EngineError, docker_get_via, engines, key_path, ssh_connect
+from app.services.store import keep_unreadable, write_json
 
 log = logging.getLogger("pierside.forwards")
 
@@ -88,14 +89,10 @@ class Forwards:
         except FileNotFoundError:
             self.items = {}
         except Exception as e:
-            log.error("cannot read %s: %s", STORE, e)
+            keep_unreadable(STORE, e)
 
     def _save(self) -> None:
-        os.makedirs(DATA_DIR, exist_ok=True)
-        tmp = STORE + ".tmp"
-        with open(tmp, "w", encoding="utf-8") as f:
-            json.dump(list(self.items.values()), f, indent=2)
-        os.replace(tmp, STORE)
+        write_json(STORE, list(self.items.values()))
 
     async def _helpers(self) -> list[dict]:
         return await self.docker._query_json("containers/json", params={"all": "1", "filters": json.dumps({"label": [FORWARD_LABEL]})})

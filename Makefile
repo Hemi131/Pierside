@@ -19,9 +19,11 @@ uninstall:
 reinstall: build uninstall
 	rdctl extension install $(REF)
 
-# The backend's TCP port is picked by Docker; hand it to the dev UI.
+# The backend's TCP port is picked by Docker; hand it and the session token to the dev UI.
 dev:
-	cd ui && VITE_PIERSIDE_BACKEND=http://localhost:$$(docker port $$(docker ps -q --filter label=com.pierside.backend=true | head -n1) 8080/tcp | head -n1 | sed 's/.*://') npm run dev
+	id=$$(docker ps -q --filter label=com.pierside.backend=true | head -n1); \
+	cd ui && VITE_PIERSIDE_BACKEND=http://localhost:$$(docker port $$id 8080/tcp | head -n1 | sed 's/.*://') \
+	VITE_PIERSIDE_TOKEN=$$(docker exec $$id cat /run/pierside-token) npm run dev
 
 logs:
 	docker logs -f --tail 200 $$(docker ps -q --filter $(BACKEND_FILTER) --filter label=com.docker.compose.project | head -n1)

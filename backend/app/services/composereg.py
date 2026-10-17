@@ -12,6 +12,7 @@ import os
 import time
 
 from app.services.engines import DATA_DIR
+from app.services.store import keep_unreadable, write_json
 
 log = logging.getLogger("pierside.compose")
 
@@ -33,14 +34,10 @@ class ComposeRegistry:
         except FileNotFoundError:
             pass
         except Exception as e:
-            log.error("cannot read %s: %s", REGISTRY, e)
+            keep_unreadable(REGISTRY, e)
 
     def _save(self) -> None:
-        os.makedirs(DATA_DIR, exist_ok=True)
-        tmp = REGISTRY + ".tmp"
-        with open(tmp, "w", encoding="utf-8") as f:
-            json.dump(self.data, f, indent=2)
-        os.replace(tmp, REGISTRY)
+        write_json(REGISTRY, self.data)
 
     def observe(self, engine_id: str, containers: list[dict]) -> None:
         """Record the compose projects seen in a container listing (saves only when something changed)."""

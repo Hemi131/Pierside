@@ -7,7 +7,7 @@ import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import type { ContainerState, Port } from "../api/types";
 import { openExternal } from "../api/ddclient";
 import { usePortHost } from "../hooks/useEngine";
-import { copyText, shortId } from "../utils/format";
+import { urlHost, copyText, shortId } from "../utils/format";
 import { MONO } from "../theme";
 
 export function stateColor(state: ContainerState | "partial" | undefined, health?: string | null): string {
@@ -81,7 +81,7 @@ export function PortLinks({ ports, max = 2 }: { ports: Port[]; max?: number }) {
           underline="hover"
           onClick={(e) => {
             e.stopPropagation();
-            openExternal(`http://${portHost}:${p.public}`);
+            openExternal(`http://${urlHost(portHost)}:${p.public}`);
           }}
           sx={{ display: "inline-flex", alignItems: "center", gap: 0.25, fontSize: 13 }}
         >

@@ -26,7 +26,7 @@ from pydantic import BaseModel
 
 from app.services import mcp_tools
 from app.services.engines import LOCAL_ID, LOCAL_URL, EngineError, engines
-from app.services.mcp_access import ACTIONS, APPROVAL_WAIT_S, MAX_LOG_LINES, Profile, StaleQuestion, activity, approvals, begin, clients, profiles, record, session_code, waiting
+from app.services.mcp_access import ACTIONS, APPROVAL_WAIT_S, MAX_LOG_LINES, Profile, StaleQuestion, UnsafePath, activity, approvals, begin, clients, profiles, record, session_code, waiting
 from app.services.updates import VERSION
 
 log = logging.getLogger("pierside.mcp")
@@ -85,7 +85,7 @@ async def _approved(profile: Profile, session: str, name: str, args: dict, targe
                 f"they open {where}, check that the request there shows the same code, and allow it. "
                 "Then call the tool again; that call waits up to a minute for their answer."
             )
-    level = mcp_tools.TOOLS[name].level
+    level = mcp_tools.call_level(name, args)
     if (profile.confirm == "all" and level != "read") or (profile.confirm == "destructive" and level == "destroy"):
         detail = "\n".join(f"{k}: {v}" for k, v in args.items() if k not in ("container", "content") and v not in (None, ""))
         if "content" in args:
@@ -142,7 +142,7 @@ async def _call_tool(profile: Profile, session: str, params: dict) -> dict:
         text = await entry.fn(mcp_tools.Ctx(profile, engine_id, docker, session), args)
         record(row, "ok")
         return result(text, False)
-    except mcp_tools.Denied as e:
+    except (mcp_tools.Denied, UnsafePath) as e:
         record(row, "denied", str(e))
         return result(f"Not allowed: {e}", True)
     except mcp_tools.ToolError as e:
@@ -351,6 +351,8 @@ async def update_profile(pid: str, body: ProfileBody):
         p, token = profiles.update(pid, _check(body))
         if not p.enabled or body.trust == "none":
             approvals.forget_profile(pid)  # switched off or trust withdrawn: running sessions must ask again
+        else:
+            approvals.forget_grants(pid)  # "allow this session" extras mustn't outlive a narrowed connection
         return {"profile": p.public(), "token": token}
     except KeyError:
         raise HTTPException(404, "Unknown connection")

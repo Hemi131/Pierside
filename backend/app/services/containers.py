@@ -16,11 +16,15 @@ NUMBER_LABEL = "com.docker.compose.container-number"
 # Invalidated by EngineHub on every container event for that id.
 _inspect_cache: dict[str, dict[str, Any]] = {}
 _inspect_sem = asyncio.Semaphore(16)
+# Bumped by every invalidation: an answer asked for before an event and arriving after it is not cached.
+_generation = 0
 
 _HEALTH_RE = re.compile(r"\((healthy|unhealthy|health: starting)\)")
 
 
 def invalidate(container_id: str | None = None) -> None:
+    global _generation
+    _generation += 1
     if container_id is None:
         _inspect_cache.clear()
     else:
@@ -31,6 +35,7 @@ async def _inspect_extra(cid: str) -> dict[str, Any]:
     cached = _inspect_cache.get(cid)
     if cached is not None:
         return cached
+    generation = _generation
     async with _inspect_sem:
         try:
             data = await query_json(f"containers/{cid}/json")
@@ -44,7 +49,8 @@ async def _inspect_extra(cid: str) -> dict[str, Any]:
         "restartCount": data.get("RestartCount", 0),
         "oomKilled": bool(state.get("OOMKilled")),
     }
-    _inspect_cache[cid] = extra
+    if generation == _generation:
+        _inspect_cache[cid] = extra
     return extra
 
 

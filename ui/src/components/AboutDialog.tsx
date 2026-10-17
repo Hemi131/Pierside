@@ -129,7 +129,7 @@ export function VersionFooter() {
                   <Typography>Desktop notifications for container problems</Typography>
                   <Typography variant="body2" color="text.secondary">
                     When a container runs out of memory, turns unhealthy or keeps restarting, or a Swarm task keeps failing, and Pierside is open but not in front. It watches the engine
-                    that is active.
+                    that is active, and the engines you watch in the background (Engines at a glance), which also report when they can't be reached.
                   </Typography>
                 </>
               }

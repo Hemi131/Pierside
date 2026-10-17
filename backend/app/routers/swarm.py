@@ -166,6 +166,10 @@ async def stack_details(name: str):
     return {"name": name, "services": services, "tasks": tasks}
 
 
+# Tasks started in the background are kept referenced until done (the loop only holds weak references).
+_background: set[asyncio.Task] = set()
+
+
 @router.delete("/stacks/{name}")
 async def delete_stack(name: str):
     """Like `docker stack rm`: services, then networks, secrets and configs with the stack label."""
@@ -174,12 +178,19 @@ async def delete_stack(name: str):
     services = await query_json("services", params={"filters": label})
     if not services:
         raise HTTPException(404, f"Stack '{name}' not found")
-    await asyncio.gather(*(query_json(f"services/{s['ID']}", method="DELETE") for s in services), return_exceptions=True)
+    results = await asyncio.gather(*(query_json(f"services/{s['ID']}", method="DELETE") for s in services), return_exceptions=True)
+    failed = [f"service {s.get('Spec', {}).get('Name', s['ID'][:12])}: {r}" for s, r in zip(services, results) if isinstance(r, Exception)]
+    if len(failed) == len(services):
+        raise HTTPException(502, "Couldn't delete the stack's services: " + "; ".join(failed[:5]))
     for kind in ("secrets", "configs"):
         items = await query_json(kind, params={"filters": label})
-        await asyncio.gather(*(query_json(f"{kind}/{i['ID']}", method="DELETE") for i in items), return_exceptions=True)
+        results = await asyncio.gather(*(query_json(f"{kind}/{i['ID']}", method="DELETE") for i in items), return_exceptions=True)
+        failed += [f"{kind[:-1]} {i.get('Spec', {}).get('Name', i['ID'][:12])}: {r}" for i, r in zip(items, results) if isinstance(r, Exception)]
     # Networks can only be removed once their tasks are gone; retry briefly in the background.
-    asyncio.create_task(_remove_stack_networks(label))
+    _background.add(t := asyncio.create_task(_remove_stack_networks(label)))
+    t.add_done_callback(_background.discard)
+    if failed:
+        raise HTTPException(502, "The stack was only partly deleted: " + "; ".join(failed[:5]))
     return {"ok": True, "services": len(services)}
 
 

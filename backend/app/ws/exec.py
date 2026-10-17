@@ -31,6 +31,27 @@ router = APIRouter()
 log = logging.getLogger("pierside.exec")
 
 _live_execs: set[str] = set()
+# Open shell sessions (handler task -> its socket), so they can be ended before an engine switch.
+_sessions: dict[asyncio.Task, WebSocket] = {}
+_closing: set[asyncio.Task] = set()  # being ended by close_all_sessions: their socket errors are expected
+
+
+async def close_all_sessions(timeout: float = 15.0) -> None:
+    """End every open shell session now: closing its socket ends the handler the normal way, and its
+    clean-up kills the process and removes its debug helper on the session's own engine, while that
+    engine's client is still open (the switch waits for this). Handlers still running after `timeout`
+    are cancelled; their process may then be left running on the old engine."""
+    open_ = {t: ws for t, ws in _sessions.items() if not t.done()}
+    _closing.update(open_)
+    for ws in open_.values():
+        try:
+            await ws.close(code=1012)  # "service restart": the UI offers to reconnect
+        except Exception:
+            pass
+    if open_:
+        _done, pending = await asyncio.wait(open_.keys(), timeout=timeout)
+        for t in pending:
+            t.cancel()
 
 # ---- shell integration -------------------------------------------------------------------------
 # The prompt gets an invisible OSC 133;B marker ("prompt ends, user input starts") so the UI knows
@@ -89,9 +110,9 @@ async def _debug_helper(target: str) -> str:
     return c.id
 
 
-async def _remove_helper(cid: str) -> None:
+async def _remove_helper(cid: str, docker) -> None:
     try:
-        await get_docker().containers.container(cid).delete(force=True)
+        await docker.containers.container(cid).delete(force=True)
     except Exception:
         pass
 
@@ -103,13 +124,17 @@ def _int(v: str | None, default: int) -> int:
         return default
 
 
-async def _kill_via_container(pid: int, sig: int) -> None:
-    """`kill` from a short-lived container in the engine host's PID namespace (remote engines)."""
-    from app.services.helper import HELPER_IMAGE, HELPER_LABEL, _ensure_image
+async def _kill_via_container(docker, pid: int, sig: int) -> None:
+    """`kill` from a short-lived container in the engine host's PID namespace (remote engines), on the
+    engine of the session (`docker`), not whichever is active by now."""
+    from app.services.helper import HELPER_IMAGE, HELPER_LABEL
 
     try:
-        await _ensure_image()
-        c = await get_docker().containers.create(
+        try:
+            await docker.images.inspect(HELPER_IMAGE)
+        except aiodocker.DockerError:
+            await docker.images.pull(HELPER_IMAGE)
+        c = await docker.containers.create(
             {
                 "Image": HELPER_IMAGE,
                 "Cmd": ["kill", f"-{int(sig)}", str(int(pid))],
@@ -123,7 +148,8 @@ async def _kill_via_container(pid: int, sig: int) -> None:
         log.warning("remote exec cleanup failed for pid %s: %s", pid, e)
 
 
-async def _cleanup(exe) -> None:
+async def _cleanup(exe, local: bool) -> None:
+    """Stop the exec's process. `local`: whether its engine is the local one (as when it was started)."""
     try:
         info = await exe.inspect()
     except Exception:
@@ -134,9 +160,9 @@ async def _cleanup(exe) -> None:
     if not pid:
         return
     for sig, wait in ((signal.SIGHUP, 1.0), (signal.SIGKILL, 0.5)):
-        if not engines.is_local:
+        if not local:
             # The process lives on another machine: signal it from a throwaway container there.
-            await _kill_via_container(pid, sig)
+            await _kill_via_container(exe.docker, pid, sig)
         else:
             try:
                 os.kill(pid, sig)
@@ -158,6 +184,12 @@ async def _cleanup(exe) -> None:
 async def ws_exec(ws: WebSocket, cid: str):
     if not await accept_authorized(ws):
         return
+    me = asyncio.current_task()
+    if me:
+        _sessions[me] = ws
+    # This session's engine, for its whole life: its clean-up must signal and remove there, even when
+    # it runs while the active engine is being switched.
+    docker, local = get_docker(), engines.is_local
     q = ws.query_params
     cols, rows = _int(q.get("cols"), 80), _int(q.get("rows"), 24)
     exe = None
@@ -167,7 +199,7 @@ async def ws_exec(ws: WebSocket, cid: str):
     try:
         if debug:
             debug_helper = await _debug_helper(cid)
-        container = get_docker().containers.container(debug_helper or cid)
+        container = docker.containers.container(debug_helper or cid)
         exe = await container.exec(
             ["/bin/sh", "-c", _DEBUG_LAUNCH] if debug else _command(q.get("shell", "auto")),
             stdin=True,
@@ -244,23 +276,31 @@ async def ws_exec(ws: WebSocket, cid: str):
     except WebSocketDisconnect:
         pass
     except Exception as e:
-        log.exception("exec ws failed")
-        await _send_error(ws, str(e))
+        if me in _closing:
+            pass  # its socket was closed for an engine switch: output still on the way fails, as expected
+        else:
+            log.exception("exec ws failed")
+            await _send_error(ws, str(e))
     finally:
-        if stream is not None:
+        try:
+            if stream is not None:
+                try:
+                    await stream.close()
+                except Exception:
+                    pass
+            if exe is not None:
+                await _cleanup(exe, local)
+                _live_execs.discard(exe.id)
+            if debug_helper is not None:
+                await _remove_helper(debug_helper, docker)
             try:
-                await stream.close()
+                await ws.close()
             except Exception:
                 pass
-        if exe is not None:
-            await _cleanup(exe)
-            _live_execs.discard(exe.id)
-        if debug_helper is not None:
-            await _remove_helper(debug_helper)
-        try:
-            await ws.close()
-        except Exception:
-            pass
+        finally:
+            if me:  # also when the clean-up above was cancelled
+                _sessions.pop(me, None)
+                _closing.discard(me)
 
 
 async def _send_error(ws: WebSocket, message: str) -> None:

@@ -44,7 +44,7 @@ export function showDesktopAlert(title: string, body: string, onClick?: () => vo
   }
   if (!desktopAlertsSupported() || Notification.permission !== "granted") return false;
   try {
-    const n = new Notification(title, { body, tag: body.slice(0, 60) });
+    const n = new Notification(title, { body, tag: `${title}: ${body}` }); // the whole text: two different alerts don't replace each other
     n.onclick = () => {
       window.focus();
       onClick?.();
@@ -62,6 +62,10 @@ const TITLES: Record<string, string> = {
   loop: "Container keeps restarting",
   service: "Swarm service keeps failing",
   "engine-down": "Engine can't be reached",
+  "server-memory": "Server memory almost full",
+  "server-swap": "Server is swapping",
+  "server-load": "Server under high load",
+  "server-disk": "Server disk almost full",
   "engine-up": "Engine is back",
 };
 
@@ -79,14 +83,22 @@ export function EngineAlerts() {
         const engineName = e.engineName ?? activeName;
         const severity = e.severity === "error" ? "error" : e.severity === "info" ? "success" : "warning";
         // The engine's own alerts (can't be reached / back) name it already.
-        toast(severity, elsewhere && !e.action.startsWith("engine-") ? `${engineName}: ${e.detail}` : e.detail);
+        // The engine's own alerts and server alerts name it already.
+        toast(severity, elsewhere && !e.action.startsWith("engine-") && !e.action.startsWith("server-") ? `${engineName}: ${e.detail}` : e.detail);
         // In the separate window, on the desktop only when Pierside isn't in front: the toast is enough
         // otherwise. Inside Rancher Desktop always: its extension view keeps reporting itself as
         // focused and visible when another window is in front, so there is nothing to go by.
         if (readPref<boolean>(DESKTOP_ALERTS_PREF) && (dd || document.hidden || !document.hasFocus())) {
           const title = `${dd ? "Pierside: " : ""}${TITLES[e.action] ?? "Pierside"}${engineName ? ` · ${engineName}` : ""}`;
+          const server = e.action.startsWith("server-");
           const open = () =>
-            elsewhere || (!e.id && !e.serviceId) ? navigate("glance") : e.serviceId ? navigate("swarm", "services", e.serviceId) : navigate("containers", e.id, "logs");
+            server && !elsewhere
+              ? navigate(e.action === "server-disk" ? "server-disk" : "server-perf")
+              : elsewhere || (!e.id && !e.serviceId)
+                ? navigate("glance")
+                : e.serviceId
+                  ? navigate("swarm", "services", e.serviceId)
+                  : navigate("containers", e.id, "logs");
           showDesktopAlert(title, e.detail, open, severity);
         }
       }),

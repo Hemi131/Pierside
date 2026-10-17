@@ -36,6 +36,7 @@ import { useResource } from "../../hooks/useResource";
 import type { ComposeProjects } from "../../api/compose";
 import { UsageCards } from "./UsageCards";
 import { useColumnLayout } from "../../components/table/useColumnLayout";
+import { inInteractiveTerminal } from "../../utils/keys";
 
 const HEADERS: { key?: SortKey; label: string; align?: "right"; width?: number | string }[] = [
   { key: "name", label: "Name" },
@@ -112,7 +113,7 @@ export function ContainersView() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const typing = (e.target as HTMLElement)?.closest("input, textarea, [contenteditable]");
-      if ((e.key === "/" && !typing) || (e.key === "f" && (e.ctrlKey || e.metaKey))) {
+      if ((e.key === "/" && !typing) || (e.key === "f" && (e.ctrlKey || e.metaKey) && !inInteractiveTerminal(e.target))) {
         e.preventDefault();
         document.querySelector<HTMLInputElement>("input[data-search]")?.focus();
       }

@@ -36,13 +36,21 @@ _running: set = set()  # SSH processes measuring right now
 _generation = 0  # raised by cancel(): measurements queued before it give up
 
 
+DF_COMMAND = "df -P -k -T 2>/dev/null || df -P -k"
+
+
 async def filesystems() -> list[dict]:
     """The server's real filesystems: device, type, mount point, size / used / free in bytes."""
-    code, out, _err = await hostfs.ssh_run(["sh", "-c", "df -P -k -T 2>/dev/null || df -P -k"])
+    code, out, _err = await hostfs.ssh_run(["sh", "-c", DF_COMMAND])
     if code != 0 and not out:
         raise FsError("Couldn't read the server's filesystems (df failed)", 502)
+    return parse_df(out.decode("utf-8", "replace"))
+
+
+def parse_df(text: str) -> list[dict]:
+    """DF_COMMAND's output -> the real filesystems (pseudo and Docker-internal ones left out)."""
     rows: dict[str, dict] = {}
-    for line in out.decode("utf-8", "replace").splitlines()[1:]:
+    for line in text.splitlines()[1:]:
         parts = line.split()
         # With -T: device type blocks used available capacity mount…  Without: no type column.
         typed = len(parts) >= 7 and not parts[1].isdigit()

@@ -6,12 +6,15 @@
  *     backend container (see backend/app/security.py);
  *   - the standalone window (served by the backend at http://localhost:<port>/app/): same-origin
  *     requests to the backend, carrying the session token redeemed from a one-time ticket;
- *   - the Vite dev server (`npm run dev`): requests to the backend's TCP port (dev origin allowed).
- *     Docker picks that port; `make.ps1 dev` passes it in as VITE_PIERSIDE_BACKEND.
+ *   - the Vite dev server (`npm run dev`): requests to the backend's TCP port, with the session token.
+ *     Docker picks that port; `make.ps1 dev` passes it in as VITE_PIERSIDE_BACKEND, and the token
+ *     (read from the backend container) as VITE_PIERSIDE_TOKEN.
  */
 import { createDockerDesktopClient } from "@docker/extension-api-client";
 
 export const DEV_BACKEND: string = import.meta.env.VITE_PIERSIDE_BACKEND || "http://localhost:47811";
+// Dev server only: a production build never carries a token, even if the variable is set while building.
+const DEV_TOKEN: string = (import.meta.env.DEV && import.meta.env.VITE_PIERSIDE_TOKEN) || "";
 
 type DD = ReturnType<typeof createDockerDesktopClient>;
 
@@ -112,7 +115,7 @@ function errorFromRejection(e: unknown): ApiError {
 async function devFetch<T>(method: string, url: string, body?: unknown): Promise<T> {
   const headers: Record<string, string> = {};
   if (body !== undefined) headers["Content-Type"] = "application/json";
-  const token = standalone ? sessionToken() : null;
+  const token = standalone ? sessionToken() : DEV_TOKEN;
   if (token) headers["X-Pierside-Token"] = token;
   const res = await fetch((standalone ? "" : DEV_BACKEND) + url, {
     method,

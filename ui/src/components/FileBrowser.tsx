@@ -234,6 +234,14 @@ export function FileBrowser({ fs, emptyHint, start = "/", toolbar, goTo = false 
   const [preview, setPreview] = useState<Preview | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
+  // Answers can arrive out of order (a slow file, then a quick one): only the latest request counts, or a
+  // late answer for file A would show, and be saved, under file B's name.
+  const listSeq = useRef(0);
+  const previewSeq = useRef(0);
+  const searchSeq = useRef(0);
+  // The folder the user is in or heading to: an action that ends later reloads its folder only if it's
+  // still this one, rather than pulling the user back.
+  const wantPath = useRef(start);
 
   // Every request goes through here, so the caller can watch answers and retry a refused one.
   const call = useCallback(
@@ -254,31 +262,44 @@ export function FileBrowser({ fs, emptyHint, start = "/", toolbar, goTo = false 
 
   const load = useCallback(
     (p: string) => {
+      const seq = ++listSeq.current;
+      searchSeq.current++; // a search still running was for the folder being left
+      setFinding(false);
+      wantPath.current = p;
       setLoading(true);
       setError(null);
       setFind("");
       setFound(null);
       call(() => api.get<{ path: string; entries: FsEntry[] }>(fs.list(p)))
         .then((r) => {
+          if (seq !== listSeq.current) return;
+          wantPath.current = r.path; // the server's spelling, as `path` has it
           setEntries(r.entries);
           setPath(r.path);
         })
-        .catch((e) => setError((e as Error).message))
-        .finally(() => setLoading(false));
+        .catch((e) => seq === listSeq.current && setError((e as Error).message))
+        .finally(() => seq === listSeq.current && setLoading(false));
     },
     [fs, call],
   );
 
   useEffect(() => load(start), [load, start]);
 
+  /** After an action in `dir`: show its result there, if the user is still there. */
+  const refreshIfStill = (dir: string) => {
+    const same = (a: string) => (a.length > 1 ? a.replace(/\/+$/, "") : a);
+    if (same(wantPath.current) === same(dir)) load(dir);
+  };
+
   const loadPreview = (p: string) => {
+    const seq = ++previewSeq.current;
     setPreview(null);
     setPreviewError(null);
     setPreviewLoading(true);
     call(() => api.get<Preview>(fs.preview(p)))
-      .then(setPreview)
-      .catch((err) => setPreviewError((err as Error).message))
-      .finally(() => setPreviewLoading(false));
+      .then((r) => seq === previewSeq.current && setPreview(r))
+      .catch((err) => seq === previewSeq.current && setPreviewError((err as Error).message))
+      .finally(() => seq === previewSeq.current && setPreviewLoading(false));
   };
 
   const detected = selected ? detectLanguage(selected) : "plain";
@@ -340,12 +361,13 @@ export function FileBrowser({ fs, emptyHint, start = "/", toolbar, goTo = false 
     const text = find.trim();
     if (!fs.search || text.length < 2) return;
     const search = fs.search;
+    const seq = ++searchSeq.current; // a newer search or a change of folder makes this one stale
     setFinding(true);
     setError(null);
     call(() => api.get<SearchResult>(search(path, text)))
-      .then(setFound)
-      .catch((e) => setError((e as Error).message))
-      .finally(() => setFinding(false));
+      .then((r) => seq === searchSeq.current && setFound(r))
+      .catch((e) => seq === searchSeq.current && setError((e as Error).message))
+      .finally(() => seq === searchSeq.current && setFinding(false));
   };
 
   // The rows shown: what a search found (with full paths), or the folder, narrowed while typing.
@@ -403,7 +425,7 @@ export function FileBrowser({ fs, emptyHint, start = "/", toolbar, goTo = false 
     }
     setUploading(null);
     if (done) toast("success", done === 1 ? `Uploaded ${files.length === 1 ? files[0].name : "1 file"} to ${dir}` : `Uploaded ${done} files to ${dir}`);
-    load(dir);
+    refreshIfStill(dir);
   };
 
   const onDrop = (e: DragEvent) => {
@@ -436,7 +458,7 @@ export function FileBrowser({ fs, emptyHint, start = "/", toolbar, goTo = false 
     } catch (err) {
       toast("error", (err as Error).message);
     }
-    load(path);
+    refreshIfStill(path);
   };
 
   const applyPermissions = async (change: { mode: string; recursive: boolean } | null) => {
@@ -450,7 +472,7 @@ export function FileBrowser({ fs, emptyHint, start = "/", toolbar, goTo = false 
     } catch (e) {
       toast("error", (e as Error).message);
     }
-    load(path);
+    refreshIfStill(path);
   };
 
   const create = async (name: string | null) => {
@@ -475,6 +497,8 @@ export function FileBrowser({ fs, emptyHint, start = "/", toolbar, goTo = false 
     }
     if (!(await leaveEditor())) return;
     setSelected(p);
+    previewSeq.current++; // a preview still loading belongs to another file
+    setPreviewLoading(false);
     setPreview({ path: p, size: 0, truncated: false, binary: false, content: "" });
     setPreviewError(null);
     setIsNew(true);
@@ -485,15 +509,20 @@ export function FileBrowser({ fs, emptyHint, start = "/", toolbar, goTo = false 
   const save = async () => {
     if (!fs.write || !selected || draft === null) return;
     setSaving(true);
+    const seq = previewSeq.current; // opening another file meanwhile changes it
     try {
       const content = eol === "\r\n" ? draft.replace(/\r?\n/g, "\r\n") : draft.replace(/\r\n/g, "\n");
       const saveUrl = fs.write.save;
       await call(() => api.put(saveUrl, { path: selected, content }));
       toast("success", `${selected.split("/").pop()} ${isNew ? "created" : "saved"}`);
-      setPreview({ path: selected, size: new Blob([content]).size, truncated: false, binary: false, content });
-      setDraft(null);
-      setIsNew(false);
-      load(path);
+      if (previewSeq.current === seq) {
+        // Still on this file: show what was saved. (Otherwise another file is open now; leave it alone.)
+        previewSeq.current++;
+        setPreview({ path: selected, size: new Blob([content]).size, truncated: false, binary: false, content });
+        setDraft(null);
+        setIsNew(false);
+      }
+      refreshIfStill(path);
     } catch (e) {
       toast("error", (e as Error).message);
     } finally {

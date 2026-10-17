@@ -35,10 +35,12 @@ export interface GlanceEngine {
   stopped?: number;
   total?: number;
   problems?: GlanceProblem[];
-  /** CPU of the running containers, 100 = one core. */
-  cpu?: number;
-  /** Memory of the running containers, bytes. */
-  mem?: number;
+  /** CPU of the running containers, 100 = one core; null while the first measurement is running. */
+  cpu?: number | null;
+  /** Memory of the running containers, bytes; null while the first measurement is running. */
+  mem?: number | null;
+  /** Some containers' samples are missing: cpu / mem are lower bounds. */
+  usagePartial?: boolean | null;
 }
 
 export interface GlanceAlert {

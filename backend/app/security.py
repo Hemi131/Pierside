@@ -14,8 +14,9 @@ Rules (both doors unless noted):
   * no token needed for: POST /diag (append-only error sink), POST /standalone/redeem (needs a
     one-time ticket instead), GET /app/* (the public UI files of the standalone window), and CORS
     preflights;
-  * tcp only: the Vite dev server origin needs no token (the dev UI has no way to get it). On the
-    socket door that exemption would be forgeable from the network, so it doesn't exist there;
+  * the Vite dev server gets no exemption: an Origin header is forgeable by any local process and
+    by any page served on that port, so the dev UI carries the token too (`make dev` reads it from
+    the backend container and passes it as VITE_PIERSIDE_TOKEN);
   * tcp only: /mcp (the MCP server for AI assistants) takes an access profile's own token instead,
     checked by the route (routers/mcp.py). It is not offered on the socket door at all.
 
@@ -69,12 +70,11 @@ class Guard:
 
         allowed = _origin_ok(origin) and (
             secrets.compare_digest(token, WS_TOKEN)
-            or (self.door == "tcp" and origin in DEV_ORIGINS)
             or (self.door == "tcp" and http and path == "/mcp" and not origin)  # non-browser clients only
             or (http and path == "/diag" and method == "POST")
             or (http and path == "/standalone/redeem" and method == "POST")
             or (http and method == "GET" and (path == "/app" or path.startswith("/app/")))
-            or (http and method == "OPTIONS")  # CORS preflight (dev origin only, see CORS config)
+            or (http and method == "OPTIONS")  # CORS preflight (dev origins only, see CORS config); the request itself needs the token
         )
         if allowed:
             return await self.app(scope, receive, send)

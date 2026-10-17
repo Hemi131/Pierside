@@ -31,9 +31,17 @@ switch ($Target) {
         if ($id) {
             $hostPort = (docker port $id 8080/tcp | Select-Object -First 1) -replace '.*:', ''
             $env:VITE_PIERSIDE_BACKEND = "http://localhost:$hostPort"
+            # Every request needs the session token, the dev UI's too.
+            $env:VITE_PIERSIDE_TOKEN = (docker exec $id cat /run/pierside-token)
             Write-Host "Backend: $env:VITE_PIERSIDE_BACKEND"
         } else { Write-Warning "Pierside backend isn't running; install the extension first" }
-        Set-Location ui; npm run dev
+        Set-Location ui
+        try { npm run dev }
+        finally {
+            # Don't leave the token in this session: a later build here would otherwise see it.
+            Remove-Item Env:VITE_PIERSIDE_TOKEN -ErrorAction SilentlyContinue
+            Set-Location ..
+        }
     }
     "logs" {
         $id = docker ps -q --filter "label=com.docker.compose.service=pierside" | Select-Object -First 1

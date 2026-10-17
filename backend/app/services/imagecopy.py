@@ -55,7 +55,11 @@ async def _open_target(target: str, job_id: str):
     os.makedirs(SOCK_DIR, exist_ok=True)
     tunnel = Tunnel(cfg)
     tunnel.path = os.path.join(SOCK_DIR, f"{cfg.id}-copy-{job_id}.sock")  # separate from the active engine's tunnel
-    await tunnel.start()
+    try:
+        await tunnel.start()
+    except BaseException:  # the caller never gets the tunnel to stop: do it here (SSH connection, socket file)
+        await asyncio.shield(tunnel.stop())
+        raise
     return aiodocker.Docker(url=tunnel.url), tunnel
 
 

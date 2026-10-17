@@ -19,6 +19,7 @@ import { EmptyState, PageHeader } from "../../components/common";
 import { Forward, openForward } from "../../components/ForwardDialog";
 import { useFeedback } from "../../components/Feedback";
 import { MONO } from "../../theme";
+import { urlHost } from "../../utils/format";
 
 interface PortRow {
   c: Container;
@@ -189,7 +190,7 @@ export function PortsView() {
                   <TableRow key={`${r.c.id}-${r.public}-${r.private}-${r.type}`} hover>
                     <TableCell sx={{ fontFamily: MONO, fontSize: 13 }}>
                       {r.type === "tcp" ? (
-                        <Link component="button" underline="hover" onClick={() => openExternal(`http://${hostIp}:${r.public}`)} sx={{ fontFamily: MONO, fontSize: 13, display: "inline-flex", alignItems: "center", gap: 0.5 }}>
+                        <Link component="button" underline="hover" onClick={() => openExternal(`http://${urlHost(hostIp)}:${r.public}`)} sx={{ fontFamily: MONO, fontSize: 13, display: "inline-flex", alignItems: "center", gap: 0.5 }}>
                           {hostIp}:{r.public}
                           <OpenInNewIcon sx={{ fontSize: 13 }} />
                         </Link>

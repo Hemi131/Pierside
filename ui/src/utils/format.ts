@@ -51,3 +51,8 @@ export async function copyText(text: string): Promise<void> {
     ta.remove();
   }
 }
+
+/** A host for a URL: an IPv6 address goes in brackets (http://[::1]:8080). */
+export function urlHost(host: string): string {
+  return host.includes(":") && !host.startsWith("[") ? `[${host}]` : host;
+}

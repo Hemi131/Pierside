@@ -237,6 +237,7 @@ class EngineHub:
             await self._dirty.wait()
             await asyncio.sleep(DEBOUNCE_S)
             self._dirty.clear()
+            engine_id = engines.active_id
             try:
                 self.containers = await containers_svc.list_containers(all=True)
             except Exception as e:
@@ -244,7 +245,8 @@ class EngineHub:
                 continue
             self.broadcast({"type": "containers", "containers": self.containers})
             try:
-                composereg.observe(engines.active_id, self.containers)  # remember compose file locations
+                if engine_id == engines.active_id:  # not across an engine switch
+                    composereg.observe(engine_id, self.containers)  # remember compose file locations
             except Exception as e:
                 log.warning("compose registry update failed: %s", e)
             self._sync_stat_streams()
@@ -271,6 +273,9 @@ class EngineHub:
         finally:
             self._stat_tasks.pop(cid, None)
             self.stats.pop(cid, None)
+        # Ended without being cancelled (a dropped connection, not a stop: that comes as an event):
+        # look again shortly, which restarts the stream if the container still runs.
+        asyncio.get_running_loop().call_later(2.0, self._dirty.set)
 
     def _stats_msg(self) -> dict:
         cpu = sum(v["cpu"] for v in self.stats.values())

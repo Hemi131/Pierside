@@ -202,6 +202,7 @@ export function ContainerDetail({ id, tab }: { id: string; tab?: string }) {
   const fs = useMemo(() => (cid ? containerFsApi(cid) : null), [cid]);
   const tabs = CONTAINER_TABS.filter((t) => t.key !== "health" || c?.health);
   const active = tabs.some((t) => t.key === tab) ? tab! : "logs";
+  const live = c?.state === "running" || c?.state === "paused";
 
   if (!c) {
     return (
@@ -243,10 +244,20 @@ export function ContainerDetail({ id, tab }: { id: string; tab?: string }) {
           logs: (visible) => <LogViewer path={`/ws/logs/container/${c.id}`} params={{ tail: "5000" }} downloadName={c.name} active={visible} />,
           inspect: () => <InspectTab id={c.id} stateKey={`${c.state}:${c.startedAt}`} />,
           mounts: () => <MountsTab c={c} />,
-          exec: (visible) => <ShellView containerId={c.id} target={c} running={c.state === "running"} active={visible} onStart={() => void containerAction(c, "start")} />,
+          // Paused keeps the shell session and the file browser (with any unsaved edit); they carry on after Resume.
+          exec: (visible) => (
+            <ShellView containerId={c.id} target={c} running={live} paused={c.state === "paused"} active={visible} onStart={() => void containerAction(c, "start")} />
+          ),
           files: () =>
-            c.state === "running" ? (
-              <FileBrowser key={c.startedAt ?? ""} fs={fs!} />
+            live ? (
+              <>
+                {c.state === "paused" && (
+                  <Alert severity="info" sx={{ mb: 1, py: 0 }}>
+                    The container is paused: opening, saving and other file actions work again once it is resumed. Unsaved changes are kept.
+                  </Alert>
+                )}
+                <FileBrowser key={c.startedAt ?? ""} fs={fs!} />
+              </>
             ) : (
               <EmptyState title="The container isn't running">
                 <Typography variant="body1">Start it to browse its filesystem.</Typography>

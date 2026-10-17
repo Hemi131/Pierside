@@ -26,6 +26,8 @@ from typing import Any
 
 import asyncssh
 
+from app.services.store import keep_unreadable, write_json
+
 log = logging.getLogger("pierside.engines")
 
 DATA_DIR = os.environ.get("PIERSIDE_DATA", "/data")
@@ -88,7 +90,7 @@ class Registry:
         except FileNotFoundError:
             return
         except Exception as e:
-            log.error("cannot read %s: %s", REGISTRY, e)
+            keep_unreadable(REGISTRY, e)
             return
         known = set(EngineConfig.__dataclass_fields__)
         self.engines = {e["id"]: EngineConfig(**{k: v for k, v in e.items() if k in known}) for e in raw.get("engines", [])}
@@ -98,12 +100,7 @@ class Registry:
             self.active = LOCAL_ID
 
     def save(self) -> None:
-        os.makedirs(DATA_DIR, exist_ok=True)
-        tmp = REGISTRY + ".tmp"
-        with open(tmp, "w", encoding="utf-8") as f:
-            json.dump({"active": self.active, "localColor": self.local_color, "engines": [asdict(e) for e in self.engines.values()]}, f, indent=2)
-        os.chmod(tmp, 0o600)
-        os.replace(tmp, REGISTRY)
+        write_json(REGISTRY, {"active": self.active, "localColor": self.local_color, "engines": [asdict(e) for e in self.engines.values()]}, mode=0o600)
 
 
 def key_path(engine_id: str) -> str:
@@ -472,8 +469,10 @@ class EngineManager:
             raise
         self.tunnel = tunnel
 
-    async def activate(self, engine_id: str, on_switch) -> None:
-        """Switch the backend to another engine. `on_switch(url)` rewires docker client + hub."""
+    async def activate(self, engine_id: str, on_switch, before_switch=None) -> None:
+        """Switch the backend to another engine. `before_switch()` runs once the new engine is reachable
+        but while everything still points at the old one (clean-up there); `on_switch(url)` then rewires
+        docker client + hub."""
         if engine_id != LOCAL_ID and engine_id not in self.registry.engines:
             raise EngineError("Unknown engine")
         async with self.switching:
@@ -492,6 +491,12 @@ class EngineManager:
                 except Exception:
                     await new_tunnel.stop()
                     raise
+            # Not on a reconnect to the same engine: its tunnel is gone already, and its helpers stay valid.
+            if before_switch and self.registry.active != engine_id:
+                try:
+                    await before_switch()
+                except Exception as e:
+                    log.warning("clean-up before switching engines failed: %s", e)
             self.tunnel = new_tunnel
             self.registry.active = engine_id
             self.registry.save()

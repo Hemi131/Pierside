@@ -31,6 +31,7 @@ import PieChartOutlineIcon from "@mui/icons-material/PieChartOutline";
 import SmartToyOutlinedIcon from "@mui/icons-material/SmartToyOutlined";
 import FolderOpenOutlinedIcon from "@mui/icons-material/FolderOpenOutlined";
 import DonutLargeOutlinedIcon from "@mui/icons-material/DonutLargeOutlined";
+import SpeedOutlinedIcon from "@mui/icons-material/SpeedOutlined";
 
 const SECTIONS = [
   { key: "containers", label: "Containers", icon: <ViewInArOutlinedIcon fontSize="small" /> },
@@ -272,6 +273,19 @@ function Footer({ route, terminalOpen, onToggleTerminal }: { route: string[]; te
             sx={{ minHeight: 0, py: 0.25 }}
           >
             Server files
+          </Button>
+        </Tooltip>
+      )}
+      {engine?.engine?.type === "ssh" && (
+        <Tooltip describeChild title="See what uses the CPU, memory, disks and network of this server, by process and container">
+          <Button
+            size="small"
+            color={route[0] === "server-perf" ? "primary" : "inherit"}
+            startIcon={<SpeedOutlinedIcon fontSize="small" />}
+            onClick={() => navigate("server-perf")}
+            sx={{ minHeight: 0, py: 0.25 }}
+          >
+            Server performance
           </Button>
         </Tooltip>
       )}

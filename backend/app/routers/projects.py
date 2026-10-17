@@ -54,7 +54,8 @@ async def list_projects():
 async def project_action(name: str, action: Literal["start", "stop", "restart", "pause", "unpause"]):
     raw = await _containers(name)
     if action == "start":
-        ids = [c["Id"] for c in raw if c["State"] in ("created", "exited", "dead")]
+        # Not `compose run` one-offs: they ran once and aren't part of the project's services.
+        ids = [c["Id"] for c in raw if c["State"] in ("created", "exited", "dead") and (c.get("Labels") or {}).get("com.docker.compose.oneoff") != "True"]
     elif action == "stop":
         ids = [c["Id"] for c in raw if c["State"] in ("running", "paused", "restarting")]
     elif action == "pause":

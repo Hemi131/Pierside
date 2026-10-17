@@ -12,6 +12,7 @@ from app.services.mcp_access import clients as mcp_clients, profiles as mcp_prof
 from app.services.engines import LOCAL_ID, EngineConfig, EngineError, engines, probe, server_host_key
 from app.services.helper import remove_all_helpers
 from app.services.hub import hub
+from app.services.watch import watch
 from app.services.composereg import registry as composereg
 from app.services.forwards import forwards
 
@@ -144,15 +145,23 @@ async def remove_engine(engine_id: str):
     await forwards.remove_for_engine(engine_id)  # and its port forwards
     mcp_profiles.forget_engine(engine_id)  # and the AI access connections set up for it
     await mcp_clients.drop(engine_id)
+    await watch.forget(engine_id)  # and its background watching
     return {"ok": True}
 
 
+async def _before_switch() -> None:
+    """Runs while the Docker client still points at the engine being left: end its open shells (their
+    clean-up kills the processes there) and remove Pierside's helpers there."""
+    from app.ws.exec import close_all_sessions  # late: the ws modules import routers' helpers
+
+    await close_all_sessions()
+    from app.services.hostperf import release_for_switch as release_perf_helper
+
+    await release_perf_helper()
+    await remove_all_helpers()
+
+
 async def _switch(url: str) -> None:
-    # Old client still points at the previous engine: clean up our helpers there first.
-    try:
-        await remove_all_helpers()
-    except Exception:
-        pass
     await docker_client.close_docker()  # next get_docker() connects to `url`
     containers_svc.invalidate()
     try:
@@ -167,7 +176,7 @@ async def _switch(url: str) -> None:
 @router.post("/{engine_id}/activate")
 async def activate_engine(engine_id: str):
     try:
-        await engines.activate(engine_id, _switch)
+        await engines.activate(engine_id, _switch, _before_switch)
     except EngineError as e:
         raise _err(e)
     except Exception as e:

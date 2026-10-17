@@ -16,6 +16,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from app.services.engines import DATA_DIR
+from app.services.store import write_json
 
 router = APIRouter(prefix="/commands", tags=["commands"])
 log = logging.getLogger("pierside.commands")
@@ -67,9 +68,5 @@ async def save_commands(commands: list[Command]):
         if not c.id:
             c.id = uuid.uuid4().hex[:12]
         out.append(c.model_dump())
-    os.makedirs(DATA_DIR, exist_ok=True)
-    tmp = COMMANDS_FILE + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(out, f)
-    os.replace(tmp, COMMANDS_FILE)
+    write_json(COMMANDS_FILE, out, indent=None)
     return out

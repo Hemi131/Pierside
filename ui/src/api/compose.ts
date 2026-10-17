@@ -149,6 +149,8 @@ function runRemote(args: string[], cwd: string, onLine: (l: OutputLine) => void)
   const done = (async () => {
     const { id } = await api.post<{ id: string }>("/compose/run", { args, cwd });
     jobId = id;
+    // Cancel pressed before the job had an id: cancel it now that it has one.
+    if (stopped) void api.del(`/compose/run/${id}`);
     let since = 0;
     for (;;) {
       const r = await api.get<{ state: string; code: number | null; lines: OutputLine[]; next: number }>(`/compose/run/${id}?since=${since}`);

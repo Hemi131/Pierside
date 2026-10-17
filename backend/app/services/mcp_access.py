@@ -32,6 +32,7 @@ from fnmatch import fnmatchcase
 import aiodocker
 
 from app.services.engines import DATA_DIR, LOCAL_ID, LOCAL_URL, SOCK_DIR, EngineError, Tunnel, engines
+from app.services.store import write_json
 
 log = logging.getLogger("pierside.mcp")
 
@@ -250,12 +251,7 @@ class ProfileStore:
             log.error("can't read %s: %s", STORE, e)
 
     def _save(self) -> None:
-        os.makedirs(DATA_DIR, exist_ok=True)
-        tmp = STORE + ".tmp"
-        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
-            json.dump({"version": STORE_VERSION, "profiles": [asdict(p) for p in self.profiles.values()]}, f, indent=1)
-        os.replace(tmp, STORE)
+        write_json(STORE, {"version": STORE_VERSION, "profiles": [asdict(p) for p in self.profiles.values()]}, mode=0o600, indent=1)
 
     def list(self) -> list[Profile]:
         self._load()
@@ -466,6 +462,10 @@ class Approvals:
         entry = self._sessions.get(session)
         return bool(entry) and entry[0] == profile.id
 
+    def forget_grants(self, pid: str) -> None:
+        """Drop what sessions of this profile were granted for the session only (the profile changed)."""
+        self._grants = {s: v for s, v in self._grants.items() if v[0] != pid}
+
     def forget_profile(self, pid: str) -> None:
         self._sessions = {s: v for s, v in self._sessions.items() if v[0] != pid}
         self._grants = {s: v for s, v in self._grants.items() if v[0] != pid}
@@ -563,6 +563,27 @@ approvals = Approvals()
 
 IDLE_CLOSE_S = 600
 
+# A request path that walks out of where it was meant to go: a name from an assistant put into a path
+# (`networks/{name}`) as `../volumes/x` would reach another endpoint, since the URL is normalised.
+# Pierside's own paths never contain these, so anything like it came from an argument.
+_UNSAFE_PATH = re.compile(r"(^|/)\.\.?(/|$)|[?#%\\\s\x00-\x1f\x7f]")
+
+
+class UnsafePath(ValueError):
+    """A Docker API path built from an argument that isn't a plain name (see GuardedDocker)."""
+
+
+class GuardedDocker(aiodocker.Docker):
+    """The Docker client of AI access (and background watching): refuses any request whose path has a
+    `.` / `..` segment, a query or fragment marker, an escape or white space. Every request, also those
+    of aiodocker's sub-APIs, is built through _canonicalize_url."""
+
+    def _canonicalize_url(self, path, *, versioned_api: bool = True):
+        text = str(path)
+        if _UNSAFE_PATH.search(text):
+            raise UnsafePath(f"{text!r} isn't a valid name here")
+        return super()._canonicalize_url(path, versioned_api=versioned_api)
+
 
 class EngineClients:
     """Docker clients per engine, independent of the engine the UI has active: for MCP calls, and
@@ -570,19 +591,23 @@ class EngineClients:
 
     def __init__(self, purpose: str = "mcp", idle_close_s: float | None = IDLE_CLOSE_S) -> None:
         self._open: dict[str, tuple[aiodocker.Docker, Tunnel | None, float]] = {}
-        self._lock = asyncio.Lock()
+        # One lock per engine: connecting to an unreachable server (seconds) mustn't hold up the others.
+        self._locks: dict[str, asyncio.Lock] = {}
         self._purpose = purpose
         self._idle_close_s = idle_close_s
 
+    def _lock(self, engine_id: str) -> asyncio.Lock:
+        return self._locks.setdefault(engine_id, asyncio.Lock())
+
     async def get(self, engine_id: str) -> aiodocker.Docker:
-        async with self._lock:
-            await self._close_idle(keep=engine_id)
+        await self._close_idle(keep=engine_id)  # outside this engine's lock: never two locks at once
+        async with self._lock(engine_id):
             entry = self._open.get(engine_id)
             if entry:
                 self._open[engine_id] = (entry[0], entry[1], time.monotonic())
                 return entry[0]
             if engine_id == LOCAL_ID:
-                docker, tunnel = aiodocker.Docker(url=LOCAL_URL), None
+                docker, tunnel = GuardedDocker(url=LOCAL_URL), None
             else:
                 cfg = engines.registry.engines.get(engine_id)
                 if cfg is None:
@@ -591,10 +616,10 @@ class EngineClients:
                 tunnel.path = os.path.join(SOCK_DIR, f"{cfg.id}-{self._purpose}.sock")  # separate from the UI's tunnel
                 try:
                     await tunnel.start()
-                except Exception:
-                    await tunnel.stop()
+                except BaseException:  # a cancelled start too, or the SSH connection would stay open
+                    await asyncio.shield(tunnel.stop())
                     raise
-                docker = aiodocker.Docker(url=tunnel.url)
+                docker = GuardedDocker(url=tunnel.url)
             self._open[engine_id] = (docker, tunnel, time.monotonic())
             return docker
 
@@ -608,8 +633,12 @@ class EngineClients:
 
     async def drop(self, engine_id: str) -> None:
         """Forget a connection that failed, so the next call reconnects."""
-        async with self._lock:
+        async with self._lock(engine_id):
             await self._close(engine_id)
+
+    async def close(self, engine_id: str) -> None:
+        """Close an engine's connection that is no longer needed (not watched, not looked at, removed)."""
+        await self.drop(engine_id)
 
     async def _close(self, engine_id: str) -> None:
         entry = self._open.pop(engine_id, None)
@@ -627,11 +656,14 @@ class EngineClients:
             return
         now = time.monotonic()
         for engine_id in [e for e, (_d, _t, used) in self._open.items() if e != keep and now - used > self._idle_close_s]:
-            await self._close(engine_id)
+            async with self._lock(engine_id):
+                entry = self._open.get(engine_id)
+                if entry and time.monotonic() - entry[2] > self._idle_close_s:  # not used meanwhile
+                    await self._close(engine_id)
 
     async def shutdown(self) -> None:
-        async with self._lock:
-            for engine_id in list(self._open):
+        for engine_id in list(self._open):
+            async with self._lock(engine_id):
                 await self._close(engine_id)
 
 

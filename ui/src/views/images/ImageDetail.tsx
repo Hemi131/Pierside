@@ -28,7 +28,7 @@ interface Details {
     Size: number;
     Architecture: string;
     Os: string;
-    Config: { Cmd: string[] | null; Entrypoint: string[] | null; ExposedPorts?: Record<string, unknown>; WorkingDir?: string; User?: string };
+    Config: { Cmd: string[] | null; Entrypoint: string[] | null; ExposedPorts?: Record<string, unknown>; WorkingDir?: string; User?: string; Labels?: Record<string, string> | null };
   };
   history: { Id: string; Created: number; CreatedBy: string; Size: number; Comment: string; Tags: string[] | null }[];
   containers: { id: string; name: string; state: string; project: string | null }[];
@@ -97,9 +97,10 @@ export function ImageDetail({ imageRef, tab }: { imageRef: string; tab?: string 
   const img = data.inspect;
   const tags = img.RepoTags ?? [];
   const title = tags.includes(imageRef) ? imageRef : (tags[0] ?? img.Id.slice(7, 19));
+  // Delete what the dialog names (the title): that tag, or the whole image when it has none.
   const deleteRow: ImageRow = {
     id: img.Id,
-    ref: tags.includes(imageRef) ? imageRef : img.Id,
+    ref: tags.includes(imageRef) ? imageRef : (tags[0] ?? img.Id),
     repo: title,
     tag: "",
     created: 0,
@@ -109,7 +110,10 @@ export function ImageDetail({ imageRef, tab }: { imageRef: string; tab?: string 
     digests: [],
     labels: {},
     dangling: !tags.length,
-    isSystem: false,
+    // As in the images list (backend routers/images.py is_system): Rancher Desktop's and extensions' images.
+    isSystem:
+      tags.some((t) => t.startsWith("rancher/") || t.startsWith("ghcr.io/rancher-sandbox/rancher-desktop/")) ||
+      "com.docker.desktop.extension.api.version" in (img.Config.Labels ?? {}),
   };
   const cmd = [...(img.Config.Entrypoint ?? []), ...(img.Config.Cmd ?? [])].join(" ");
 

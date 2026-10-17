@@ -55,7 +55,7 @@ function iconBtn(title: string, icon: JSX.Element, onClick: () => void, opts: { 
 }
 
 /** Merged swarm logs with per-service colour (label "service.slot") and per-service show/hide chips. */
-function SwarmLogs({ path, serviceNames, downloadName }: { path: string; serviceNames: string[]; downloadName: string }) {
+function SwarmLogs({ path, serviceNames, downloadName, active }: { path: string; serviceNames: string[]; downloadName: string; active: boolean }) {
   const [hidden, setHidden] = useState<Set<string>>(new Set());
   const colors = useMemo(() => serviceColors(serviceNames), [serviceNames]);
   const svcOf = (label: string) => label.replace(/\.[^.]+$/, "");
@@ -101,6 +101,7 @@ function SwarmLogs({ path, serviceNames, downloadName }: { path: string; service
       filterKey={[...hidden].sort().join(",") + ":" + serviceNames.join(",")}
       toolbarExtra={chips}
       downloadName={downloadName}
+      active={active}
     />
   );
 }
@@ -199,7 +200,7 @@ export function ServiceDetail({ id, tab }: { id: string; tab?: string }) {
               </>
             );
           },
-          logs: () => <SwarmLogs path={`/ws/logs/service/${s.id}`} serviceNames={[short]} downloadName={s.name} />,
+          logs: (visible) => <SwarmLogs path={`/ws/logs/service/${s.id}`} serviceNames={[short]} downloadName={s.name} active={visible} />,
           inspect: () => <JsonTree data={data.inspect} />,
         }}
       />
@@ -263,7 +264,7 @@ export function StackDetail({ name, tab }: { name: string; tab?: string }) {
         panels={{
           services: () => <ServicesTable services={data.services} reload={() => void reload()} showStack={false} />,
           tasks: () => <TasksTable tasks={data.tasks} serviceNames={svcNameById} />,
-          logs: () => <SwarmLogs path={`/ws/logs/stack/${encodeURIComponent(name)}`} serviceNames={stableNames} downloadName={name} />,
+          logs: (visible) => <SwarmLogs path={`/ws/logs/stack/${encodeURIComponent(name)}`} serviceNames={stableNames} downloadName={name} active={visible} />,
         }}
       />
     </Box>

@@ -3,13 +3,13 @@
 FROM --platform=$BUILDPLATFORM node:22-alpine AS ui-build
 WORKDIR /ui
 COPY ui/package.json ui/package-lock.json* ./
-RUN --mount=type=cache,target=/root/.npm npm ci || npm install
+RUN --mount=type=cache,target=/root/.npm npm ci
 COPY ui/ ./
 RUN npm run build
 
 # pierside-mcp-setup: run on the user's computer by the AI access page to register the MCP server
 # with Claude Code / Devin CLI (host/mcpsetup). Shipped as Rancher Desktop "host binaries".
-FROM --platform=$BUILDPLATFORM golang:1.23-alpine AS host-build
+FROM --platform=$BUILDPLATFORM golang:1.27-alpine AS host-build
 WORKDIR /src
 COPY host/mcpsetup/ ./
 RUN CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="-s -w -H windowsgui" -o /out/windows/pierside-mcp-setup.exe . \

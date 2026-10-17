@@ -37,6 +37,7 @@ export function ShellView({
   containerId,
   target,
   running,
+  paused,
   active,
   onStart,
 }: {
@@ -44,6 +45,8 @@ export function ShellView({
   /** For the command palette: which of the user's commands are meant for this container. */
   target: ShellTarget;
   running: boolean;
+  /** Paused: the session stays; it carries on when the container is resumed. */
+  paused?: boolean;
   active: boolean;
   onStart?: () => void;
 }) {
@@ -160,9 +163,17 @@ export function ShellView({
     if (term.current) term.current.options.theme = xtermTheme(theme, theme.palette.mode === "dark" ? "#15191e" : "#ffffff");
   }, [theme]);
 
+  // A session starts only once the container runs (Docker refuses exec into a paused one), and stays
+  // through a pause: `armed` turns on when it runs, off when it stops, and a pause doesn't change it.
+  const [armed, setArmed] = useState(running && !paused);
+  useEffect(() => {
+    if (!running) setArmed(false);
+    else if (!paused) setArmed(true);
+  }, [running, paused]);
+
   // Session lifecycle.
   useEffect(() => {
-    if (!running) {
+    if (!armed) {
       setState("idle");
       return;
     }
@@ -231,7 +242,7 @@ export function ShellView({
       sock?.close();
       if (ws.current === sock) ws.current = null;
     };
-  }, [containerId, running, session, saved, debug]);
+  }, [containerId, armed, session, saved, debug]);
 
   // Fit + focus when the tab becomes visible.
   useEffect(() => {
@@ -302,7 +313,7 @@ export function ShellView({
         />
         <Tooltip title={dirty ? "Start a new session with these settings" : "Start a new session"}>
           <span>
-            <Button variant={dirty ? "contained" : "outlined"} startIcon={<RefreshIcon />} onClick={apply} disabled={!running}>
+            <Button variant={dirty ? "contained" : "outlined"} startIcon={<RefreshIcon />} onClick={apply} disabled={!armed}>
               {dirty ? "Apply" : "New session"}
             </Button>
           </span>
@@ -329,6 +340,11 @@ export function ShellView({
           </Button>
         </Alert>
       )}
+      {paused && armed && (
+        <Alert severity="info" sx={{ mb: 1, py: 0 }}>
+          The container is paused. This shell carries on when you resume it.
+        </Alert>
+      )}
       {error && !noShell && (
         <Alert severity="error" sx={{ mb: 1, py: 0 }}>
           {error}
@@ -348,7 +364,12 @@ export function ShellView({
           "& .xterm-viewport": { bgcolor: "transparent !important" },
         }}
       >
-        <Box ref={host} sx={{ position: "absolute", inset: 0, visibility: running ? "visible" : "hidden" }} />
+        <Box ref={host} sx={{ position: "absolute", inset: 0, visibility: armed ? "visible" : "hidden" }} />
+        {!armed && running && (
+          <Stack alignItems="center" justifyContent="center" sx={{ position: "absolute", inset: 0 }}>
+            <Typography color="text.secondary">The container is paused. The shell starts when you resume it.</Typography>
+          </Stack>
+        )}
         {!running && (
           <Stack alignItems="center" justifyContent="center" spacing={1.5} sx={{ position: "absolute", inset: 0 }}>
             <Typography color="text.secondary">The container isn't running, so there's no shell to attach to.</Typography>
