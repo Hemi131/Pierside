@@ -4,6 +4,12 @@ Each release of Pierside, newest first. Install a specific one with `rdctl exten
 
 ## Unreleased
 
+## 1.3.1 - 2026-10-19
+
+- Switching away from an SSH engine whose server had been turned off could take minutes, and other engines seemed impossible to switch to meanwhile. Requests waiting for the lost server now get its answer together instead of each trying to reconnect in turn, and the switch no longer waits for clean-up on a server it can't reach.
+- A switch to an engine that doesn't answer can be cancelled: **Cancel switch** in the engine menu, or **Cancel** in place of **Switch** on Manage engines and Engines at a glance.
+- Server performance: on a narrow window, the "Order held" note no longer moves the process list down when it appears, which ended the hold at once.
+
 ## 1.3.0 - 2026-10-17
 
 - **Server performance** (SSH engines, in the bottom bar): like `htop` for the server, with the container of each process. CPU, memory, disks and network with 10-minute charts, a note when something stands out (low memory, swapping, waiting for the disk, high load), and the processes sorted by CPU, memory or disk I/O, or grouped by container. Processes can be ended, forced to end or given a lower priority. Nothing has to be installed on the server.

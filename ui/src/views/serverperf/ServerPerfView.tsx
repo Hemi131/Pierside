@@ -536,8 +536,10 @@ export function ServerPerfView() {
               />
             </Tooltip>
             <Box sx={{ flex: 1 }} />
-            {held && (
-              <Typography variant="body2" color="text.secondary">
+            {/* Always takes its place (only hidden): appearing could wrap the toolbar on a narrow window and
+                push the list down from under the pointer, which would end the hold at once. */}
+            {holdOnHover && (
+              <Typography variant="body2" color="text.secondary" sx={{ visibility: held ? "visible" : "hidden" }} aria-hidden={!held}>
                 Order held while the pointer is on the list
               </Typography>
             )}

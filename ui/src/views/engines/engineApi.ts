@@ -50,10 +50,32 @@ export function updateEngine(id: string, patch: { name?: string; color?: string 
   return api.patch(`/engines/${encodeURIComponent(id)}`, patch);
 }
 
-/** Switch engines, then reload the UI so every view and socket starts clean on the new engine. */
-/** Switch engines and start over on `hash` (a page of the new engine). */
+/** A switch the user cancelled: nothing changed, nothing to report. */
+export class SwitchCancelled extends Error {}
+
+let cancelling = false;
+
+/** Switch engines and start over on `hash` (a page of the new engine), reloading the UI so every view
+ *  and socket starts clean. Rejects with `SwitchCancelled` after `cancelSwitch()`. */
 export async function activateEngine(id: string, hash = "#/containers"): Promise<void> {
-  await api.post(`/engines/${encodeURIComponent(id)}/activate`);
+  cancelling = false;
+  try {
+    await api.post(`/engines/${encodeURIComponent(id)}/activate`);
+  } catch (e) {
+    if (cancelling) throw new SwitchCancelled("Switch cancelled");
+    throw e;
+  }
   window.location.hash = hash;
   window.location.reload();
+}
+
+/** Stop a switch still connecting to its engine (an offline server would hold it until the time limit). */
+export async function cancelSwitch(): Promise<void> {
+  cancelling = true;
+  await api.post("/engines/switch/cancel");
+}
+
+/** Show a failed switch, unless it was cancelled. */
+export function switchFailed(err: unknown, show: (message: string) => void): void {
+  if (!(err instanceof SwitchCancelled)) show((err as Error).message);
 }

@@ -27,7 +27,7 @@ import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
 import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
 import { Glance, GlanceAlert, GlanceEngine, GlanceProblem, loadGlance, refreshGlance, saveGlanceSettings } from "../../api/glance";
-import { activateEngine } from "../engines/engineApi";
+import { activateEngine, cancelSwitch, switchFailed } from "../engines/engineApi";
 import { PageHeader } from "../../components/common";
 import { useFeedback } from "../../components/Feedback";
 import { formatBytes, relativeTime } from "../../utils/format";
@@ -78,7 +78,7 @@ function Meter({ label, value, max, text, partial }: { label: string; value: num
   );
 }
 
-function EngineCard({ e, now, busy, onWatch, onOpen }: { e: GlanceEngine; now: number; busy: boolean; onWatch: (on: boolean) => void; onOpen: (hash?: string) => void }) {
+function EngineCard({ e, now, busy, switching, onWatch, onOpen }: { e: GlanceEngine; now: number; busy: boolean; switching: boolean; onWatch: (on: boolean) => void; onOpen: (hash?: string) => void }) {
   const loaded = e.updatedAt != null;
   const up = loaded && e.reachable;
   return (
@@ -97,6 +97,10 @@ function EngineCard({ e, now, busy, onWatch, onOpen }: { e: GlanceEngine; now: n
         </Box>
         {e.active ? (
           <Chip size="small" color="success" label="Active" />
+        ) : switching ? (
+          <Button size="small" onClick={() => void cancelSwitch().catch(() => undefined)} startIcon={<CircularProgress size={14} />}>
+            Cancel
+          </Button>
         ) : (
           <Button size="small" disabled={busy} onClick={() => onOpen()}>
             Switch
@@ -229,7 +233,8 @@ export function GlanceView() {
   const { toast } = useFeedback();
   const [data, setData] = useState<Glance | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [switching, setSwitching] = useState<string | null>(null); // engine being connected to
+  const busy = !!switching;
   const [now, setNow] = useState(Date.now());
 
   // Each engine is asked separately; while any is still being asked, read often, so each card fills in
@@ -302,10 +307,10 @@ export function GlanceView() {
       if (hash) window.location.hash = hash;
       return;
     }
-    setBusy(true);
+    setSwitching(id);
     activateEngine(id, hash).catch((err) => {
-      setBusy(false);
-      toast("error", (err as Error).message);
+      setSwitching(null);
+      switchFailed(err, (m) => toast("error", m));
     });
   };
 
@@ -343,7 +348,7 @@ export function GlanceView() {
         <>
           <Stack direction="row" flexWrap="wrap" useFlexGap spacing={1.5}>
             {data.engines.map((e) => (
-              <EngineCard key={e.id} e={e} now={now} busy={busy} onWatch={(on) => void save({ watch: { [e.id]: on } })} onOpen={(hash) => open(e.id, hash)} />
+              <EngineCard key={e.id} e={e} now={now} busy={busy} switching={switching === e.id} onWatch={(on) => void save({ watch: { [e.id]: on } })} onOpen={(hash) => open(e.id, hash)} />
             ))}
           </Stack>
           <RecentAlerts alerts={data.recent} now={now} engines={data.engines} />

@@ -1,6 +1,7 @@
 """Engine management: list, probe (host-key + docker check), add, remove, activate; and a short
 status of any engine without switching to it."""
 
+import asyncio
 import re
 
 from fastapi import APIRouter, HTTPException
@@ -10,7 +11,7 @@ from app.services import containers as containers_svc
 from app.services import docker_client
 from app.services.mcp_access import clients as mcp_clients, profiles as mcp_profiles
 from app.services.engines import LOCAL_ID, EngineConfig, EngineError, engines, probe, server_host_key
-from app.services.helper import remove_all_helpers
+from app.services.helper import forget_helpers, remove_all_helpers
 from app.services.hub import hub
 from app.services.watch import watch
 from app.services.composereg import registry as composereg
@@ -153,12 +154,16 @@ async def _before_switch() -> None:
     """Runs while the Docker client still points at the engine being left: end its open shells (their
     clean-up kills the processes there) and remove Pierside's helpers there."""
     from app.ws.exec import close_all_sessions  # late: the ws modules import routers' helpers
+    from app.services import hostperf
 
-    await close_all_sessions()
-    from app.services.hostperf import release_for_switch as release_perf_helper
-
-    await release_perf_helper()
-    await remove_all_helpers()
+    try:
+        await asyncio.gather(close_all_sessions(), hostperf.release_for_switch())
+        await remove_all_helpers()
+    finally:
+        # Cut short (the engine being left is unreachable, see EngineManager.activate): what was left
+        # there can't be reached anyway, and the new engine mustn't be asked about it.
+        hostperf.forget_helper()
+        forget_helpers()
 
 
 async def _switch(url: str) -> None:
@@ -171,6 +176,12 @@ async def _switch(url: str) -> None:
     except Exception:
         pass
     await hub.restart()
+
+
+@router.post("/switch/cancel")
+async def cancel_switch():
+    """Stop a switch that is still connecting (an offline server would hold it until the time limit)."""
+    return {"cancelled": engines.cancel_switch()}
 
 
 @router.post("/{engine_id}/activate")

@@ -148,6 +148,11 @@ async def _reap_loop() -> None:
                 await _remove(cid)
 
 
+def forget_helpers() -> None:
+    """After an engine switch: the volume helpers known belong to the engine left."""
+    _helpers.clear()
+
+
 async def remove_all_helpers() -> None:
     """Remove every helper container we know of, plus any stale labelled ones."""
     _helpers.clear()

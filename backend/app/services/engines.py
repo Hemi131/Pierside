@@ -38,6 +38,11 @@ LOCAL_ID = "local"
 LOCAL_URL = "unix:///var/run/docker.sock"
 UNAVAILABLE_URL = "unix:///run/pierside-engine-not-connected.sock"
 CONNECT_TIMEOUT = 10
+RETRY_AFTER_FAILURE = 5  # s: a failed connect is the answer for everyone asking meanwhile
+# Clean-up on the engine being left (shells, helpers) may not hold a switch up for long; when that
+# engine is unreachable already there is nothing to reach, so the switch only waits briefly.
+CLEANUP_TIMEOUT = 30
+CLEANUP_TIMEOUT_UNREACHABLE = 3
 
 
 @dataclass
@@ -326,15 +331,25 @@ class Tunnel:
         self.server: asyncio.AbstractServer | None = None
         self.lock = asyncio.Lock()
         self.last_error: str | None = None
+        self.failed_at = 0.0
 
     @property
     def url(self) -> str:
         return f"unix://{self.path}"
 
+    @property
+    def unreachable(self) -> bool:
+        """The connection is gone and the last attempt to reconnect failed."""
+        return (self.conn is None or self.conn.is_closed()) and self.last_error is not None
+
     async def _connection(self):
         async with self.lock:
             if self.conn is not None and not self.conn.is_closed():
                 return self.conn
+            # Callers that queued behind a failed attempt get its answer instead of trying again one by
+            # one (each up to CONNECT_TIMEOUT): with a server switched off, a dozen requests waited minutes.
+            if self.last_error is not None and asyncio.get_running_loop().time() - self.failed_at < RETRY_AFTER_FAILURE:
+                raise EngineError(self.last_error)
             key_text = None
             if self.cfg.hasKey:
                 with open(key_path(self.cfg.id), encoding="utf-8") as f:
@@ -346,6 +361,7 @@ class Tunnel:
                 self.last_error = None
             except EngineError as e:
                 self.last_error = str(e)
+                self.failed_at = asyncio.get_running_loop().time()
                 raise
             return self.conn
 
@@ -413,6 +429,8 @@ class EngineManager:
         self.switching = asyncio.Lock()
         self.error: str | None = None
         self._startup: asyncio.Task | None = None
+        self._connecting: asyncio.Future | None = None  # a switch connecting to its engine
+        self._cancel_requested = False
 
     @property
     def active_id(self) -> str:
@@ -486,15 +504,26 @@ class EngineManager:
             if engine_id != LOCAL_ID:
                 cfg = self.registry.engines[engine_id]
                 new_tunnel = Tunnel(cfg)
+                # Its own task, so that cancel_switch() can stop it (an offline server: up to CONNECT_TIMEOUT
+                # per step) without cancelling the request waiting here.
+                self._connecting = asyncio.ensure_future(new_tunnel.start())
+                self._cancel_requested = False
                 try:
-                    await new_tunnel.start()
-                except Exception:
+                    await self._connecting
+                except BaseException:
                     await new_tunnel.stop()
+                    if self._cancel_requested:
+                        raise EngineError("Switch cancelled")
                     raise
+                finally:
+                    self._connecting = None
             # Not on a reconnect to the same engine: its tunnel is gone already, and its helpers stay valid.
             if before_switch and self.registry.active != engine_id:
+                limit = CLEANUP_TIMEOUT_UNREACHABLE if old_tunnel is not None and old_tunnel.unreachable else CLEANUP_TIMEOUT
                 try:
-                    await before_switch()
+                    await asyncio.wait_for(before_switch(), limit)
+                except asyncio.TimeoutError:
+                    log.warning("clean-up before switching engines took over %s s; switching anyway", limit)
                 except Exception as e:
                     log.warning("clean-up before switching engines failed: %s", e)
             self.tunnel = new_tunnel
@@ -504,6 +533,15 @@ class EngineManager:
             await on_switch(self.url())
             if old_tunnel:
                 await old_tunnel.stop()
+
+    def cancel_switch(self) -> bool:
+        """Stop a switch that is still connecting to its engine (nothing has changed yet then). Once
+        connected, the switch goes on: it is past the point where cancelling would leave a clean state."""
+        if self._connecting is None or self._connecting.done():
+            return False
+        self._cancel_requested = True
+        self._connecting.cancel()
+        return True
 
     def add(self, cfg: EngineConfig, key_text: str | None) -> EngineConfig:
         cfg.id = cfg.id or secrets.token_hex(6)

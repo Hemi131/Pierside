@@ -384,6 +384,11 @@ async def leave() -> None:
         await release()
 
 
+def forget_helper() -> None:
+    """After an engine switch: whatever helper there was belongs to the engine left."""
+    _s.helper = None
+
+
 async def _release() -> None:
     """Remove the helper (call with _s.lock held, or from the sample itself)."""
     async with _s.helper_lock:

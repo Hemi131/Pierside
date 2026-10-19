@@ -1,5 +1,6 @@
 import { ReactNode, useState } from "react";
-import { Box, Button, Divider, List, ListItemButton, ListItemIcon, ListItemText, Menu, MenuItem, Stack, Tooltip, Typography } from "@mui/material";
+import { Box, Button, CircularProgress, Divider, List, ListItemButton, ListItemIcon, ListItemText, Menu, MenuItem, Stack, Tooltip, Typography } from "@mui/material";
+import CloseIcon from "@mui/icons-material/Close";
 import ComputerIcon from "@mui/icons-material/Computer";
 import CloudOutlinedIcon from "@mui/icons-material/CloudOutlined";
 import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
@@ -9,7 +10,7 @@ import { usePersistentState } from "../hooks/usePersistentState";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import KeyboardDoubleArrowLeftIcon from "@mui/icons-material/KeyboardDoubleArrowLeft";
 import KeyboardDoubleArrowRightIcon from "@mui/icons-material/KeyboardDoubleArrowRight";
-import { activateEngine, EngineList, engineSubtitle } from "../views/engines/engineApi";
+import { activateEngine, cancelSwitch, EngineList, engineSubtitle, switchFailed } from "../views/engines/engineApi";
 import ViewInArOutlinedIcon from "@mui/icons-material/ViewInArOutlined";
 import LayersOutlinedIcon from "@mui/icons-material/LayersOutlined";
 import StorageOutlinedIcon from "@mui/icons-material/StorageOutlined";
@@ -51,7 +52,7 @@ function EngineSwitcher({ collapsed, glance }: { collapsed: boolean; glance: boo
   const { engine } = useEngine();
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const [list, setList] = useState<EngineList | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [switching, setSwitching] = useState<string | null>(null); // engine being connected to
   const meta = engine?.engine;
   const open = (el: HTMLElement) => {
     setAnchor(el);
@@ -110,21 +111,31 @@ function EngineSwitcher({ collapsed, glance }: { collapsed: boolean; glance: boo
           <MenuItem
             key={e.id}
             selected={e.active}
-            disabled={busy}
+            disabled={!!switching}
             onClick={() => {
               if (e.active) return setAnchor(null);
-              setBusy(true);
+              setSwitching(e.id);
               activateEngine(e.id).catch((err) => {
-                setBusy(false);
-                window.alert((err as Error).message);
+                setSwitching(null);
+                switchFailed(err, window.alert);
               });
             }}
           >
-            <ListItemIcon>{e.type === "ssh" ? <CloudOutlinedIcon fontSize="small" /> : <ComputerIcon fontSize="small" />}</ListItemIcon>
+            <ListItemIcon>
+              {switching === e.id ? <CircularProgress size={16} /> : e.type === "ssh" ? <CloudOutlinedIcon fontSize="small" /> : <ComputerIcon fontSize="small" />}
+            </ListItemIcon>
             <ListItemText primary={e.name} secondary={e.type === "ssh" ? engineSubtitle(e.name, `${e.user}@${e.host}`) : "Rancher Desktop"} />
             {e.color && <Box sx={{ width: 10, height: 10, borderRadius: "50%", bgcolor: e.color, ml: 2, flexShrink: 0 }} />}
           </MenuItem>
         ))}
+        {switching && (
+          <MenuItem onClick={() => void cancelSwitch().catch(() => undefined)}>
+            <ListItemIcon>
+              <CloseIcon fontSize="small" />
+            </ListItemIcon>
+            <ListItemText>Cancel switch</ListItemText>
+          </MenuItem>
+        )}
         <Divider />
         <MenuItem
           onClick={() => {

@@ -41,7 +41,7 @@ import { PageHeader } from "../../components/common";
 import { useFeedback } from "../../components/Feedback";
 import { MONO } from "../../theme";
 import { EngineColorPicker } from "../../components/EngineColor";
-import { activateEngine, EngineEntry, EngineList, updateEngine } from "./engineApi";
+import { activateEngine, cancelSwitch, EngineEntry, EngineList, switchFailed, updateEngine } from "./engineApi";
 
 interface ProbeResult {
   hostKey: string;
@@ -369,7 +369,7 @@ export function EnginesView() {
     try {
       await activateEngine(id);
     } catch (e) {
-      toast("error", (e as Error).message);
+      switchFailed(e, (m) => toast("error", m));
       setSwitching(null);
     }
   };
@@ -449,11 +449,16 @@ export function EnginesView() {
                   <ColorCell engine={e} onChanged={() => void reload()} />
                 </TableCell>
                 <TableCell align="right" sx={{ py: 0.5 }}>
-                  {!e.active && (
-                    <Button size="small" variant="outlined" disabled={!!switching} onClick={() => void activate(e.id)} startIcon={switching === e.id ? <CircularProgress size={14} /> : undefined}>
-                      Switch
-                    </Button>
-                  )}
+                  {!e.active &&
+                    (switching === e.id ? (
+                      <Button size="small" variant="outlined" onClick={() => void cancelSwitch().catch(() => undefined)} startIcon={<CircularProgress size={14} />}>
+                        Cancel
+                      </Button>
+                    ) : (
+                      <Button size="small" variant="outlined" disabled={!!switching} onClick={() => void activate(e.id)}>
+                        Switch
+                      </Button>
+                    ))}
                   {e.type === "ssh" && (
                     <Tooltip title={e.active ? "Switch to another engine first" : "Remove"}>
                       <span>
