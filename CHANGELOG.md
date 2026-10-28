@@ -4,6 +4,10 @@ Each release of Pierside, newest first. Install a specific one with `rdctl exten
 
 ## Unreleased
 
+## 1.3.2 - 2026-10-28
+
+- Server performance no longer scrolls sideways in a narrow window: the process list leaves out the Running, User, Disk and Container columns as it gets narrower (the command's tooltip shows what they would), and the charts and the switches at the top fit the width.
+
 ## 1.3.1 - 2026-10-19
 
 - Switching away from an SSH engine whose server had been turned off could take minutes, and other engines seemed impossible to switch to meanwhile. Requests waiting for the lost server now get its answer together instead of each trying to reconnect in turn, and the switch no longer waits for clean-up on a server it can't reach.

@@ -65,6 +65,27 @@ function duration(s: number | null): string {
   return `${Math.floor(s / 86400)} d`;
 }
 
+type Columns = { running: boolean; user: boolean; disk: boolean; container: boolean; compact: boolean };
+
+/** Which of the optional columns fit `width` px (PID, CPU, memory, command and ⋮ always stay). They go
+ *  least useful first: the fixed widths below plus ~120 px for the command must fit. */
+function columnsFor(width: number, grouped: boolean): Columns {
+  const compact = width < 460; // narrower PID, CPU and memory columns and less padding too
+  if (grouped) return { running: false, user: false, disk: width >= 620, container: true, compact };
+  return { running: width >= 950, user: width >= 880, disk: width >= 780, container: width >= 630, compact };
+}
+
+/** What the hidden columns would show, for the command's tooltip. */
+function hiddenDetails(p: PerfProcess, show: Columns): string {
+  const parts = [
+    !show.user && `User: ${p.user}`,
+    !show.container && p.container && `Container: ${p.container.service ?? p.container.name}`,
+    !show.disk && p.read != null && `Disk R / W: ${rate(p.read)} / ${rate(p.write ?? 0)}`,
+    !show.running && `Running: ${duration(p.seconds)}`,
+  ].filter(Boolean);
+  return parts.length ? `${parts.join(" · ")}\n` : "";
+}
+
 function Bar({ value, max }: { value: number; max: number }) {
   const v = max > 0 ? Math.min(100, (value / max) * 100) : 0;
   return <LinearProgress variant="determinate" value={v} color={v > 90 ? "error" : v > 70 ? "warning" : "primary"} sx={{ height: 6, borderRadius: 3, bgcolor: "action.hover" }} />;
@@ -120,6 +141,18 @@ export function ServerPerfView() {
   // re-sorts every 2 s and the row (and its ⋮) moves away from under the pointer.
   const [held, setHeld] = useState<string[] | null>(null);
   const [holdOnHover, setHoldOnHover] = usePersistentState("serverPerf.holdOrder", true);
+  // The table drops columns as it gets narrow instead of making the page scroll sideways.
+  const [tableWidth, setTableWidth] = useState(Infinity);
+  const tableObserver = useRef<ResizeObserver | null>(null);
+  const measureTable = useCallback((el: HTMLDivElement | null) => {
+    tableObserver.current?.disconnect();
+    tableObserver.current = null;
+    if (el) {
+      tableObserver.current = new ResizeObserver(([entry]) => setTableWidth(entry.contentRect.width));
+      tableObserver.current.observe(el);
+    }
+  }, []);
+  const show = columnsFor(tableWidth, grouped);
   const pointerIn = useRef(false);
   const lastSeen = useRef(new Map<string, PerfProcess>());
   // One read loop: a read asked for while one is on its way (an action, a switch) waits for it and
@@ -358,7 +391,7 @@ export function ServerPerfView() {
         }
         actions={
           data && (
-            <Stack direction="row" alignItems="center" spacing={1.5}>
+            <Stack direction="row" alignItems="center" justifyContent="flex-end" sx={{ flexWrap: "wrap", columnGap: 1.5, rowGap: 0.5, ml: 2 }}>
               <Tooltip
                 title={
                   data.via === "docker"
@@ -490,7 +523,7 @@ export function ServerPerfView() {
             </Card>
           </Stack>
 
-          <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(420px, 1fr))", gap: 2, mb: 2 }}>
+          <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(420px, 100%), 1fr))", gap: 2, mb: 2 }}>
             <TimeChart title="CPU" windowS={WINDOW_S} times={times} format={pct} yMax={100} series={[{ key: "cpu", label: "Busy", values: history.map((h) => h.cpu ?? 0) }]} />
             <TimeChart title="Memory used" windowS={WINDOW_S} times={times} format={(v) => formatBytes(v)} yMax={s.mem.total} series={[{ key: "mem", label: "Used", values: history.map((h) => h.mem) }]} />
             <TimeChart
@@ -550,8 +583,8 @@ export function ServerPerfView() {
             )}
           </Stack>
 
-          <Paper variant="outlined" sx={{ mb: 2 }}>
-            <Table size="small" stickyHeader>
+          <Paper variant="outlined" sx={{ mb: 2 }} ref={measureTable}>
+            <Table size="small" stickyHeader sx={show.compact ? { "& .MuiTableCell-root": { px: 1 } } : undefined}>
               <TableHead>
                 <TableRow>
                   {grouped ? (
@@ -562,39 +595,41 @@ export function ServerPerfView() {
                     </TableCell>
                   ) : (
                     <>
-                      <TableCell sx={{ width: 80 }}>
+                      <TableCell sx={{ width: show.compact ? 64 : 80 }}>
                         <TableSortLabel active={sort === "pid"} direction="asc" onClick={() => setSort("pid")}>
                           PID
                         </TableSortLabel>
                       </TableCell>
-                      <TableCell sx={{ width: 100 }}>User</TableCell>
-                      <TableCell sx={{ width: 180 }}>Container</TableCell>
+                      {show.user && <TableCell sx={{ width: 100 }}>User</TableCell>}
+                      {show.container && <TableCell sx={{ width: 180 }}>Container</TableCell>}
                     </>
                   )}
-                  <TableCell align="right" sx={{ width: 90 }}>
+                  <TableCell align="right" sx={{ width: show.compact ? 64 : 90 }}>
                     <Tooltip title="Like htop: 100 % is one full core, so a process can show more than 100 % on several cores. The CPU card above is the whole server.">
                       <TableSortLabel active={sort === "cpu"} direction="desc" onClick={() => setSort("cpu")}>
                         CPU
                       </TableSortLabel>
                     </Tooltip>
                   </TableCell>
-                  <TableCell align="right" sx={{ width: 110 }}>
+                  <TableCell align="right" sx={{ width: show.compact ? 84 : 110 }}>
                     <TableSortLabel active={sort === "mem"} direction="desc" onClick={() => setSort("mem")}>
                       Memory
                     </TableSortLabel>
                   </TableCell>
-                  <TableCell align="right" sx={{ width: 150 }}>
-                    <TableSortLabel active={sort === "io"} direction="desc" onClick={() => setSort("io")}>
-                      Disk R / W
-                    </TableSortLabel>
-                  </TableCell>
+                  {show.disk && (
+                    <TableCell align="right" sx={{ width: 150 }}>
+                      <TableSortLabel active={sort === "io"} direction="desc" onClick={() => setSort("io")}>
+                        Disk R / W
+                      </TableSortLabel>
+                    </TableCell>
+                  )}
                   {grouped ? (
                     <TableCell align="right" sx={{ width: 110 }}>
                       Processes
                     </TableCell>
                   ) : (
                     <>
-                      <TableCell sx={{ width: 70 }}>Running</TableCell>
+                      {show.running && <TableCell sx={{ width: 70 }}>Running</TableCell>}
                       <TableCell>
                         <TableSortLabel active={sort === "name"} direction="asc" onClick={() => setSort("name")}>
                           Command
@@ -621,14 +656,15 @@ export function ServerPerfView() {
                         </TableCell>
                         <TableCell align="right">{pct(g.cpu)}</TableCell>
                         <TableCell align="right">{formatBytes(g.mem)}</TableCell>
-                        <TableCell align="right">{g.read == null ? "—" : `${rate(g.read)} / ${rate(g.write ?? 0)}`}</TableCell>
+                        {show.disk && <TableCell align="right">{g.read == null ? "—" : `${rate(g.read)} / ${rate(g.write ?? 0)}`}</TableCell>}
                         <TableCell align="right">{g.count}</TableCell>
                       </TableRow>
                     ))
                   : shownRows.map((p) => (
                       <TableRow key={keyOf(p)} hover sx={p.ended ? { opacity: 0.45 } : undefined}>
                         <TableCell sx={{ fontFamily: MONO }}>{p.pid}</TableCell>
-                        <TableCell>{p.user}</TableCell>
+                        {show.user && <TableCell>{p.user}</TableCell>}
+                        {show.container && (
                         <TableCell>
                           {p.container ? (
                             <Link component="button" underline="hover" onClick={() => navigate("containers", p.container!.id)} sx={{ textAlign: "left" }}>
@@ -640,13 +676,14 @@ export function ServerPerfView() {
                             </Typography>
                           )}
                         </TableCell>
+                        )}
                         <TableCell align="right" sx={{ fontWeight: p.cpu >= 50 && !p.ended ? 600 : undefined }}>
                           {p.ended ? "ended" : pct(p.cpu)}
                         </TableCell>
                         <TableCell align="right">{formatBytes(p.mem)}</TableCell>
-                        <TableCell align="right">{p.read == null ? "—" : `${rate(p.read)} / ${rate(p.write ?? 0)}`}</TableCell>
-                        <TableCell>{duration(p.seconds)}</TableCell>
-                        <TableCell sx={{ fontFamily: MONO, fontSize: 12, maxWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={p.cmd}>
+                        {show.disk && <TableCell align="right">{p.read == null ? "—" : `${rate(p.read)} / ${rate(p.write ?? 0)}`}</TableCell>}
+                        {show.running && <TableCell>{duration(p.seconds)}</TableCell>}
+                        <TableCell sx={{ fontFamily: MONO, fontSize: 12, maxWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={hiddenDetails(p, show) + p.cmd}>
                           {p.nice > 0 ? <Chip size="small" label={`nice ${p.nice}`} sx={{ height: 18, fontSize: 10, mr: 0.75 }} /> : null}
                           {p.cmd}
                         </TableCell>
