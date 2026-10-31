@@ -8,14 +8,14 @@ decided yet whether Docker may be used on this server, the answer is 403 with `n
 import posixpath
 from urllib.parse import quote
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from app.services import hostfs
 from app.services.fsbrowse import FsError, at_most
 
-router = APIRouter(prefix="/hostfs", tags=["hostfs"])
+router = APIRouter(prefix="/hostfs", tags=["hostfs"], dependencies=[Depends(hostfs.bind_request)])
 
 
 def _error(e: FsError) -> HTTPException:
@@ -42,11 +42,38 @@ async def state():
 
 class Consent(BaseModel):
     allow: bool
+    engine: str  # the engine the user answered about
+
+
+def _same_engine(engine: str) -> None:
+    """A setting is per server: the answer must not land on another one, if the active engine changed while
+    the question was open or in another window."""
+    if hostfs.engine_id() != engine:
+        raise FsError("The active engine has changed. Nothing was switched: look at the page again and choose again.", 409)
+
+
+@router.get("/root-terminal")
+async def get_root_terminal():
+    async def build():
+        return {"on": hostfs.root_terminal(), "problem": await hostfs.docker_problem()}
+
+    return await _do(build())
+
+
+@router.put("/root-terminal")
+async def set_root_terminal(body: Consent):
+    async def apply():
+        _same_engine(body.engine)
+        hostfs.set_root_terminal(body.allow)
+        return {"on": body.allow}
+
+    return await _do(apply())
 
 
 @router.put("/consent")
 async def set_consent(body: Consent):
     async def apply():
+        _same_engine(body.engine)
         hostfs.set_consent(body.allow)
         if not body.allow:
             await hostfs.release_all()

@@ -4,6 +4,14 @@ Each release of Pierside, newest first. Install a specific one with `rdctl exten
 
 ## Unreleased
 
+## 1.4.0 - 2026-10-31
+
+- **Root terminal** (SSH engines): a switch in the terminal's header opens that server's terminal as root, through a privileged helper container. Off by default, remembered per server, and it asks before turning on. See [Remote engines](docs/remote-engines.md#root-terminal).
+- A file or process action on a server (upload, delete, change permissions, save, end a process) could finish on the other server if you switched engines while it ran. It now stops with a message instead, also when a second window still shows the previous server.
+- **Cancel switch** stops the switch you see, not whichever one happens to be connecting, and only one switch runs at a time in a window.
+- A server setting (Root terminal, or using Docker where you have no permission) is refused if the active engine changed while you were answering, instead of landing on another server.
+- Containers: the icons of containers inside a Compose project are no longer cut off after a column has been resized.
+
 ## 1.3.2 - 2026-10-28
 
 - Server performance no longer scrolls sideways in a narrow window: the process list leaves out the Running, User, Disk and Container columns as it gets narrower (the command's tooltip shows what they would), and the charts and the switches at the top fit the width.

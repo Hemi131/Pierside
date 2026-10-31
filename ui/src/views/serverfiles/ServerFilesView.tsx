@@ -11,6 +11,7 @@ import { api, ApiError } from "../../api/ddclient";
 import { FileBrowser, FileBrowserApi } from "../../components/FileBrowser";
 import { PageHeader } from "../../components/common";
 import { useFeedback } from "../../components/Feedback";
+import { onEngine } from "../engines/engineApi";
 import { useEngine } from "../../hooks/useEngine";
 import { MONO } from "../../theme";
 
@@ -55,7 +56,7 @@ export function ServerFilesView({ path }: { path?: string }) {
 
   const setUseDocker = async (allow: boolean) => {
     try {
-      await api.put("/hostfs/consent", { allow });
+      await api.put("/hostfs/consent", { allow, engine: meta?.id });
       setState((s) => (s ? { ...s, useDocker: allow } : s));
       return true;
     } catch (e) {
@@ -64,18 +65,20 @@ export function ServerFilesView({ path }: { path?: string }) {
     }
   };
 
+  const here = (url: string) => onEngine(url, meta?.id);
+
   const fs = useMemo<FileBrowserApi>(
     () => ({
-      list: (p) => `/hostfs/files?path=${q(p)}`,
-      preview: (p) => `/hostfs/file?path=${q(p)}`,
-      download: (p) => `/hostfs/download?path=${q(p)}`,
-      search: (p, text) => `/hostfs/search?path=${q(p)}&q=${q(text)}`,
+      list: (p) => here(`/hostfs/files?path=${q(p)}`),
+      preview: (p) => here(`/hostfs/file?path=${q(p)}`),
+      download: (p) => here(`/hostfs/download?path=${q(p)}`),
+      search: (p, text) => here(`/hostfs/search?path=${q(p)}&q=${q(text)}`),
       write: {
-        upload: (dir, file) => `/hostfs/upload?path=${q(dir)}&filename=${q(file)}`,
-        save: "/hostfs/file",
-        mkdir: "/hostfs/mkdir",
-        remove: "/hostfs/delete",
-        chmod: "/hostfs/chmod",
+        upload: (dir, file) => here(`/hostfs/upload?path=${q(dir)}&filename=${q(file)}`),
+        save: here("/hostfs/file"),
+        mkdir: here("/hostfs/mkdir"),
+        remove: here("/hostfs/delete"),
+        chmod: here("/hostfs/chmod"),
       },
       onResult: (r) => {
         if (r && typeof r === "object" && "via" in r) setVia((r as { via: "ssh" | "docker" }).via);

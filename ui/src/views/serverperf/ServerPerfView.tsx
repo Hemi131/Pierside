@@ -269,7 +269,7 @@ export function ServerPerfView() {
     overrides.current.useDocker = allow;
     setData((d) => d && { ...d, useDocker: allow }); // at once; put back if saving fails
     try {
-      await api.put("/hostfs/consent", { allow });
+      await api.put("/hostfs/consent", { allow, engine: meta?.id });
       read(); // the next sample is read the new way
     } catch (e) {
       delete overrides.current.useDocker;

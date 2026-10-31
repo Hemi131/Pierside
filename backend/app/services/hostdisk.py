@@ -129,7 +129,7 @@ def _parse(text: str) -> tuple[int | None, bool, bool]:
 
 
 async def _du_ssh(path: str) -> str:
-    conn = await engines.tunnel._connection()
+    conn = await hostfs.tunnel()._connection()
     proc = await conn.create_process(shlex.join(["sh", "-c", _DU, "sh", path, str(SIZE_SECONDS)]), encoding="utf-8", errors="replace")
     _running.add(proc)
     try:

@@ -61,11 +61,22 @@ As your SSH user, Pierside sees every process's CPU and memory, but disk reads a
 Most of Pierside works the same on a remote engine. In short:
 
 - **Compose** runs on the server, where the project's files are, instead of on your computer.
-- **Terminal** in the bottom bar is a full shell on the server instead of a Docker console.
+- **Terminal** in the bottom bar is a full shell on the server instead of a Docker console. With its **Root terminal** switch on, it opens as root on that server (see below).
 - **Server files**, **Server performance** and **Server disk** in the bottom bar show the server itself: its files, what uses its CPU, memory, disks and network, and what takes its disk space. They exist only for SSH engines.
 - **Port links** open the server's address, and **Forward a port** brings a remote container's port to your `localhost` through the SSH connection.
 
 The full list, with the reason for each difference, is in [What works where](what-works-where.md#local-engine-or-ssh-engine).
+
+### Root terminal
+
+The **Root terminal** switch in the terminal's header opens that server's terminal as root, without a password. It is off by default, remembered per server, and asks before it turns on. A red **root** mark shows while a session really is root.
+
+- **How it works:** Pierside starts a privileged helper container on the server, and the shell enters the server's own namespaces. It is a shell on the server, not in a container. Anyone who may use Docker on a server can already become root there; this makes it one switch.
+- **Not recorded by sudo:** it bypasses the server's sudo rules and sudo log. Use it only if you are allowed to be root on that server.
+- **When the terminal closes or loses its connection** (network drop, computer asleep, switching engines), the helper is removed and everything started in the session ends, including `tmux`, `screen` and `nohup` jobs. A system upgrade or a migration could be left half done, so start long jobs through the server's service manager (`systemd-run`, `systemctl start`), which keeps them running.
+- **It needs no SSH terminal,** so it can work where the SSH account isn't allowed one. It does need a privileged container and the `alpine` helper image.
+- **When it isn't possible** (rootless Docker, user namespace remapping, or privileged containers refused), the terminal says why and opens your normal shell, without the root mark.
+- **AI assistants** can't use it.
 
 ## Where credentials are stored
 

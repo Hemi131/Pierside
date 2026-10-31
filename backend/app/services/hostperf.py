@@ -306,7 +306,9 @@ async def _helper() -> str:
             except aiodocker.DockerError:
                 pass
             _s.helper = None
+        hostfs.engine_id()
         await _ensure_image()
+        hostfs.engine_id()  # no await between this and using the client below
         c = await get_docker().containers.create(
             {
                 "Image": HELPER_IMAGE,
@@ -664,8 +666,9 @@ async def act(engine: str, pid: int, start: int, action: str) -> dict:
     text = err.decode("utf-8", "replace").strip()
     via = "ssh"
     denied = lambda t: "not permitted" in t.lower() or "permission denied" in t.lower()  # noqa: E731
-    root = await _root_mode()
-    if code != 0 and denied(text) and root:
+    # Only after a refusal: a done action mustn't turn into an error because the engine changed since.
+    root = code != 0 and denied(text) and await _root_mode()
+    if root:
         code, _out, err2 = await _in_helper(["sh", "-c", _ACT, "sh", *args])
         text, via = err2.decode("utf-8", "replace").strip(), "docker"
     if code != 0:

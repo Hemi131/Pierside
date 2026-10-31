@@ -4,12 +4,12 @@ The UI lists a folder through the Server files routes (/hostfs/files) and asks h
 each of its subfolders, one request each, so the list fills in as the answers arrive.
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
 from app.services import hostdisk, hostfs
 from app.services.fsbrowse import FsError
 
-router = APIRouter(prefix="/hostdisk", tags=["hostdisk"])
+router = APIRouter(prefix="/hostdisk", tags=["hostdisk"], dependencies=[Depends(hostfs.bind_request)])
 
 
 async def _do(coro):

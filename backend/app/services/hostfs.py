@@ -21,6 +21,7 @@ import secrets
 import shlex
 import time
 from collections.abc import AsyncIterator
+from contextvars import ContextVar
 
 import aiodocker
 
@@ -56,10 +57,34 @@ class NeedsConsent(FsError):
 # ---- where we are -------------------------------------------------------------------------------------
 
 
+# The engine a request is meant for. A file or process action takes several steps, and an engine switch can
+# land between two of them: engine_id() and tunnel() then refuse, so the next step can't run on the other
+# server. A step already running stays on its own connection. Requests are bound by bind_request; other
+# callers (background clean-up) aren't.
+_request_engine: ContextVar[str | None] = ContextVar("hostfs_request_engine", default=None)
+
+
+async def bind_request(engine: str | None = None) -> None:
+    """FastAPI dependency of the Server files, performance and disk routers. `?engine=` is the server the
+    page shows: a second window can still show the old one after a switch, and its request must not run on
+    the new one. Without it, the engine active now. Async on purpose: it runs in the request's own task,
+    where the value stays for the handler and its streamed answer."""
+    _request_engine.set(engine or (None if engines.is_local else engines.active_id))
+
+
 def engine_id() -> str:
     if engines.is_local or engines.tunnel is None:
         raise FsError("Server files are for SSH engines: switch to one first", 409)
+    bound = _request_engine.get()
+    if bound is not None and bound != engines.active_id:
+        raise FsError("The active engine changed, so this stopped here. Look at the page again, and check the previous server if this was already running.", 409)
     return engines.active_id
+
+
+def tunnel():
+    """The active engine's tunnel, for the engine this request started on."""
+    engine_id()
+    return engines.tunnel
 
 
 def ssh_user() -> str:
@@ -93,6 +118,22 @@ def set_consent(allow: bool) -> None:
     write_json(STORE, data, indent=None)
 
 
+def root_terminal() -> bool:
+    """Whether this server's terminal opens as root, through a privileged helper (off unless switched on).
+    Separate from consent(): that one lets helpers read and change files, this one is the whole server."""
+    value = _load().get("rootTerminal")
+    return isinstance(value, dict) and value.get(engine_id()) is True
+
+
+def set_root_terminal(on: bool) -> None:
+    data = _load()
+    chosen = data.get("rootTerminal")
+    chosen = chosen if isinstance(chosen, dict) else {}
+    chosen[engine_id()] = on
+    data["rootTerminal"] = chosen
+    write_json(STORE, data, indent=None)
+
+
 async def docker_problem() -> str | None:
     """Why the Docker fallback can't help on this server, or None."""
     eid = engine_id()
@@ -112,7 +153,7 @@ async def docker_problem() -> str | None:
 
 
 async def ssh_run(cmd: list[str], data: bytes | None = None) -> tuple[int, bytes, bytes]:
-    conn = await engines.tunnel._connection()
+    conn = await tunnel()._connection()
     try:
         result = await asyncio.wait_for(conn.run(shlex.join(cmd), input=data, encoding=None, check=False), SSH_TIMEOUT_S)
     except asyncio.TimeoutError:
@@ -139,6 +180,7 @@ def _mountable(folder: str) -> None:
 
 
 async def _create(folder: str, writable: bool) -> str:
+    engine_id()
     await _ensure_image()
     config = {
         "Image": HELPER_IMAGE,
@@ -149,6 +191,7 @@ async def _create(folder: str, writable: bool) -> str:
         # A bind mount through Mounts (not Binds) fails for a missing folder instead of creating it.
         "HostConfig": {"AutoRemove": True, "NetworkMode": "none", "Mounts": [{"Type": "bind", "Source": folder, "Target": MOUNT, "ReadOnly": not writable}]},
     }
+    engine_id()  # no await between this and using the client below
     try:
         c = await get_docker().containers.create(config, name=f"pierside-helper-{secrets.token_hex(4)}")
     except aiodocker.DockerError as e:
@@ -419,7 +462,7 @@ async def upload(directory: str, name: str, size: int, body: AsyncIterator[bytes
             owner = await fswrite.owner_of(cid, inner, MOUNT)
             await fswrite.upload(cid, inner, name, size, body, root=MOUNT, owner=owner)
         return {"path": target, "via": "docker"}
-    conn = await engines.tunnel._connection()
+    conn = await tunnel()._connection()
     proc = await conn.create_process(shlex.join(["sh", "-c", 'cat > "$1"', "sh", target]), encoding=None)
     received = 0
     async for chunk in body:
@@ -445,7 +488,7 @@ async def download(path: str) -> AsyncIterator[bytes]:
             async for chunk in fsbrowse.stream_file(cid, MOUNT, _inside(mounted, path)):
                 yield chunk
         return
-    conn = await engines.tunnel._connection()
+    conn = await tunnel()._connection()
     proc = await conn.create_process(shlex.join(["cat", "--", path]), encoding=None)
     while True:
         chunk = await proc.stdout.read(65536)

@@ -178,10 +178,15 @@ async def _switch(url: str) -> None:
     await hub.restart()
 
 
+class CancelSwitch(BaseModel):
+    engine: str
+
+
 @router.post("/switch/cancel")
-async def cancel_switch():
-    """Stop a switch that is still connecting (an offline server would hold it until the time limit)."""
-    return {"cancelled": engines.cancel_switch()}
+async def cancel_switch(body: CancelSwitch):
+    """Stop a switch to this engine that is still connecting (an offline server would hold it until the
+    time limit) or waiting for another switch to finish."""
+    return {"cancelled": engines.cancel_switch(body.engine)}
 
 
 @router.post("/{engine_id}/activate")

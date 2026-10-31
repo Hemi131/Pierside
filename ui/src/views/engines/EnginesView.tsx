@@ -41,7 +41,7 @@ import { PageHeader } from "../../components/common";
 import { useFeedback } from "../../components/Feedback";
 import { MONO } from "../../theme";
 import { EngineColorPicker } from "../../components/EngineColor";
-import { activateEngine, cancelSwitch, EngineEntry, EngineList, switchFailed, updateEngine } from "./engineApi";
+import { activateEngine, cancelSwitch, EngineEntry, EngineList, switchFailed, updateEngine, useSwitching } from "./engineApi";
 
 interface ProbeResult {
   hostKey: string;
@@ -361,16 +361,14 @@ export function EnginesView() {
   const { data, reload } = useResource<EngineList>("/engines");
   const { toast, confirm } = useFeedback();
   const [adding, setAdding] = useState(false);
-  const [switching, setSwitching] = useState<string | null>(null);
+  const switching = useSwitching();
   const [renaming, setRenaming] = useState<EngineEntry | null>(null);
 
   const activate = async (id: string) => {
-    setSwitching(id);
     try {
       await activateEngine(id);
     } catch (e) {
       switchFailed(e, (m) => toast("error", m));
-      setSwitching(null);
     }
   };
 

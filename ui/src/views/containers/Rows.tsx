@@ -135,6 +135,10 @@ function ActionCell({ busy, active, paused, onToggle, toggleLabel, menu, onDelet
   );
 }
 
+/** Icons never get cut off: with saved column widths the table clips its cells, and this column can be
+ *  48 px, too little for the indent plus the icon. They spill into the empty padding of the next cell. */
+const ICON_CELL = { "&&": { overflow: "visible" } };
+
 export function ContainerRow({ c, stats, nested, selected, onSelect, pending }: {
   c: Container;
   stats?: ContainerStats;
@@ -166,7 +170,7 @@ export function ContainerRow({ c, stats, nested, selected, onSelect, pending }: 
       <TableCell padding="checkbox" onClick={(e) => e.stopPropagation()}>
         <Checkbox size="small" checked={selected} onChange={(e) => onSelect(e.target.checked)} inputProps={{ "aria-label": `Select ${c.name}` }} />
       </TableCell>
-      <TableCell sx={{ width: 36, pl: nested ? 4 : 1, pr: 0 }}>
+      <TableCell sx={{ width: 36, pl: nested ? 4 : 1, pr: 0, ...ICON_CELL }}>
         <Tooltip title={c.status}>
           <ViewInArOutlinedIcon sx={{ fontSize: 20, color: stateColor(c.state, c.health), display: "block" }} />
         </Tooltip>
@@ -286,7 +290,7 @@ export function ProjectRow({ g, expanded, onToggleExpand, checked, indeterminate
           inputProps={{ "aria-label": `Select project ${g.name}` }}
         />
       </TableCell>
-      <TableCell sx={{ width: 36, pl: 0, pr: 0 }}>
+      <TableCell sx={{ width: 36, pl: 0, pr: 0, ...ICON_CELL }}>
         <Stack direction="row" alignItems="center">
           <IconButton
             size="small"

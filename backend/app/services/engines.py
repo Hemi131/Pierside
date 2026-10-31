@@ -38,6 +38,7 @@ LOCAL_ID = "local"
 LOCAL_URL = "unix:///var/run/docker.sock"
 UNAVAILABLE_URL = "unix:///run/pierside-engine-not-connected.sock"
 CONNECT_TIMEOUT = 10
+SWITCH_CANCELLED = "Switch cancelled"  # the UI recognises this answer
 RETRY_AFTER_FAILURE = 5  # s: a failed connect is the answer for everyone asking meanwhile
 # Clean-up on the engine being left (shells, helpers) may not hold a switch up for long; when that
 # engine is unreachable already there is nothing to reach, so the switch only waits briefly.
@@ -422,6 +423,13 @@ class Tunnel:
 # ---- manager ---------------------------------------------------------------------------------
 
 
+class _Switch:
+    def __init__(self, engine_id: str) -> None:
+        self.engine_id = engine_id
+        self.connecting: asyncio.Future | None = None
+        self.cancelled = False
+
+
 class EngineManager:
     def __init__(self) -> None:
         self.registry = Registry()
@@ -429,8 +437,7 @@ class EngineManager:
         self.switching = asyncio.Lock()
         self.error: str | None = None
         self._startup: asyncio.Task | None = None
-        self._connecting: asyncio.Future | None = None  # a switch connecting to its engine
-        self._cancel_requested = False
+        self._switches: set[_Switch] = set()  # waiting for their turn or connecting; each can be cancelled
 
     @property
     def active_id(self) -> str:
@@ -493,7 +500,18 @@ class EngineManager:
         docker client + hub."""
         if engine_id != LOCAL_ID and engine_id not in self.registry.engines:
             raise EngineError("Unknown engine")
+        me = _Switch(engine_id)
+        self._switches.add(me)
+        try:
+            await self._activate(me, on_switch, before_switch)
+        finally:
+            self._switches.discard(me)
+
+    async def _activate(self, me: _Switch, on_switch, before_switch) -> None:
+        engine_id = me.engine_id
         async with self.switching:
+            if me.cancelled:  # while it waited for another switch to finish
+                raise EngineError(SWITCH_CANCELLED)
             old_tunnel = self.tunnel
             new_tunnel = None
             if old_tunnel is not None and old_tunnel.cfg.id == engine_id:
@@ -506,17 +524,19 @@ class EngineManager:
                 new_tunnel = Tunnel(cfg)
                 # Its own task, so that cancel_switch() can stop it (an offline server: up to CONNECT_TIMEOUT
                 # per step) without cancelling the request waiting here.
-                self._connecting = asyncio.ensure_future(new_tunnel.start())
-                self._cancel_requested = False
+                me.connecting = asyncio.ensure_future(new_tunnel.start())
                 try:
-                    await self._connecting
+                    await me.connecting
                 except BaseException:
                     await new_tunnel.stop()
-                    if self._cancel_requested:
-                        raise EngineError("Switch cancelled")
+                    if me.cancelled:
+                        raise EngineError(SWITCH_CANCELLED)
                     raise
-                finally:
-                    self._connecting = None
+                if me.cancelled:  # as it finished connecting: this was answered as cancelled
+                    await new_tunnel.stop()
+                    raise EngineError(SWITCH_CANCELLED)
+            # Connected, or nothing to connect to: from here on it goes through, so it can't be cancelled.
+            self._switches.discard(me)
             # Not on a reconnect to the same engine: its tunnel is gone already, and its helpers stay valid.
             if before_switch and self.registry.active != engine_id:
                 limit = CLEANUP_TIMEOUT_UNREACHABLE if old_tunnel is not None and old_tunnel.unreachable else CLEANUP_TIMEOUT
@@ -534,14 +554,16 @@ class EngineManager:
             if old_tunnel:
                 await old_tunnel.stop()
 
-    def cancel_switch(self) -> bool:
-        """Stop a switch that is still connecting to its engine (nothing has changed yet then). Once
-        connected, the switch goes on: it is past the point where cancelling would leave a clean state."""
-        if self._connecting is None or self._connecting.done():
-            return False
-        self._cancel_requested = True
-        self._connecting.cancel()
-        return True
+    def cancel_switch(self, engine_id: str) -> bool:
+        """Stop the switches to this engine that are still waiting or connecting (nothing has changed yet
+        then); a switch to another engine goes on. Once connected, a switch goes on too: it is past the
+        point where cancelling would leave a clean state."""
+        mine = [s for s in self._switches if s.engine_id == engine_id]
+        for s in mine:
+            s.cancelled = True
+            if s.connecting is not None:
+                s.connecting.cancel()
+        return bool(mine)
 
     def add(self, cfg: EngineConfig, key_text: str | None) -> EngineConfig:
         cfg.id = cfg.id or secrets.token_hex(6)

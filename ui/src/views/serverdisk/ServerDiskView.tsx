@@ -40,6 +40,7 @@ import { api } from "../../api/ddclient";
 import type { FsEntry } from "../../components/FileBrowser";
 import { PageHeader } from "../../components/common";
 import { useFeedback } from "../../components/Feedback";
+import { onEngine } from "../engines/engineApi";
 import { useEngine } from "../../hooks/useEngine";
 import { navigate } from "../../hooks/useRoute";
 import { MONO } from "../../theme";
@@ -135,13 +136,13 @@ export function ServerDiskView({ path }: { path?: string }) {
     const worker = async () => {
       while (next < todo.length && run.current === mine) {
         const p = todo[next++];
-        const result: Measured = await api.get<Size>(`/hostdisk/size?path=${encodeURIComponent(p)}`).catch((e) => ({ error: (e as Error).message }));
+        const result: Measured = await api.get<Size>(onEngine(`/hostdisk/size?path=${encodeURIComponent(p)}`, meta?.id)).catch((e) => ({ error: (e as Error).message }));
         setSizes((s) => ({ ...s, [p]: result }));
       }
     };
     await Promise.all(Array.from({ length: PARALLEL }, worker));
     if (run.current === mine) setBusy(false);
-  }, []);
+  }, [meta?.id]);
 
   const stop = useCallback(() => {
     run.current++;
@@ -157,7 +158,7 @@ export function ServerDiskView({ path }: { path?: string }) {
     if (!path || meta?.type !== "ssh") return;
     let gone = false;
     api
-      .get<{ entries: FsEntry[] }>(`/hostfs/files?path=${encodeURIComponent(path)}`)
+      .get<{ entries: FsEntry[] }>(onEngine(`/hostfs/files?path=${encodeURIComponent(path)}`, meta?.id))
       .then((r) => {
         if (gone) return;
         setEntries(r.entries);
@@ -181,7 +182,7 @@ export function ServerDiskView({ path }: { path?: string }) {
   // The same answer as on the Server files page, kept per server.
   const setUseDocker = async (allow: boolean) => {
     try {
-      await api.put("/hostfs/consent", { allow });
+      await api.put("/hostfs/consent", { allow, engine: meta?.id });
       setOverview((o) => (o ? { ...o, useDocker: allow } : o));
       // Measure again what the answer changes: what was only partly readable, or what came through Docker.
       const again = Object.entries(known.current).filter(([, v]) => isSize(v) && (allow ? v.partial && !v.timedOut : v.via === "docker")).map(([p]) => p);

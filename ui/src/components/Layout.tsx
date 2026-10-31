@@ -10,7 +10,7 @@ import { usePersistentState } from "../hooks/usePersistentState";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import KeyboardDoubleArrowLeftIcon from "@mui/icons-material/KeyboardDoubleArrowLeft";
 import KeyboardDoubleArrowRightIcon from "@mui/icons-material/KeyboardDoubleArrowRight";
-import { activateEngine, cancelSwitch, EngineList, engineSubtitle, switchFailed } from "../views/engines/engineApi";
+import { activateEngine, cancelSwitch, EngineList, engineSubtitle, switchFailed, useSwitching } from "../views/engines/engineApi";
 import ViewInArOutlinedIcon from "@mui/icons-material/ViewInArOutlined";
 import LayersOutlinedIcon from "@mui/icons-material/LayersOutlined";
 import StorageOutlinedIcon from "@mui/icons-material/StorageOutlined";
@@ -52,7 +52,7 @@ function EngineSwitcher({ collapsed, glance }: { collapsed: boolean; glance: boo
   const { engine } = useEngine();
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const [list, setList] = useState<EngineList | null>(null);
-  const [switching, setSwitching] = useState<string | null>(null); // engine being connected to
+  const switching = useSwitching();
   const meta = engine?.engine;
   const open = (el: HTMLElement) => {
     setAnchor(el);
@@ -114,9 +114,7 @@ function EngineSwitcher({ collapsed, glance }: { collapsed: boolean; glance: boo
             disabled={!!switching}
             onClick={() => {
               if (e.active) return setAnchor(null);
-              setSwitching(e.id);
               activateEngine(e.id).catch((err) => {
-                setSwitching(null);
                 switchFailed(err, window.alert);
               });
             }}

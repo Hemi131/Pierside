@@ -1,3 +1,4 @@
+import { useSyncExternalStore } from "react";
 import { api } from "../../api/ddclient";
 
 export interface EngineMeta {
@@ -50,29 +51,53 @@ export function updateEngine(id: string, patch: { name?: string; color?: string 
   return api.patch(`/engines/${encodeURIComponent(id)}`, patch);
 }
 
+/** A request URL for the server a page shows: the backend refuses it if another engine is active by then
+ *  (a second window can still show the old server after a switch). */
+export function onEngine(url: string, engineId: string | undefined): string {
+  return engineId ? `${url}${url.includes("?") ? "&" : "?"}engine=${encodeURIComponent(engineId)}` : url;
+}
+
 /** A switch the user cancelled: nothing changed, nothing to report. */
 export class SwitchCancelled extends Error {}
 
-let cancelling = false;
+// One switch at a time in this window, whichever page started it, and every page shows the same one.
+let switchingTo: string | null = null;
+const listeners = new Set<() => void>();
+
+function setSwitching(id: string | null): void {
+  switchingTo = id;
+  listeners.forEach((l) => l());
+}
+
+/** The engine this window is switching to. */
+export function useSwitching(): string | null {
+  return useSyncExternalStore(
+    (l) => {
+      listeners.add(l);
+      return () => listeners.delete(l);
+    },
+    () => switchingTo,
+  );
+}
 
 /** Switch engines and start over on `hash` (a page of the new engine), reloading the UI so every view
  *  and socket starts clean. Rejects with `SwitchCancelled` after `cancelSwitch()`. */
 export async function activateEngine(id: string, hash = "#/containers"): Promise<void> {
-  cancelling = false;
+  if (switchingTo) throw new Error("Another engine switch is running: wait for it or cancel it first.");
+  setSwitching(id);
   try {
     await api.post(`/engines/${encodeURIComponent(id)}/activate`);
   } catch (e) {
-    if (cancelling) throw new SwitchCancelled("Switch cancelled");
-    throw e;
+    setSwitching(null);
+    throw (e as Error).message === "Switch cancelled" ? new SwitchCancelled("Switch cancelled") : e;
   }
   window.location.hash = hash;
   window.location.reload();
 }
 
-/** Stop a switch still connecting to its engine (an offline server would hold it until the time limit). */
+/** Stop this window's switch while it is still connecting (an offline server would hold it until the time limit). */
 export async function cancelSwitch(): Promise<void> {
-  cancelling = true;
-  await api.post("/engines/switch/cancel");
+  if (switchingTo) await api.post("/engines/switch/cancel", { engine: switchingTo });
 }
 
 /** Show a failed switch, unless it was cancelled. */

@@ -27,7 +27,7 @@ import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
 import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
 import { Glance, GlanceAlert, GlanceEngine, GlanceProblem, loadGlance, refreshGlance, saveGlanceSettings } from "../../api/glance";
-import { activateEngine, cancelSwitch, switchFailed } from "../engines/engineApi";
+import { activateEngine, cancelSwitch, switchFailed, useSwitching } from "../engines/engineApi";
 import { PageHeader } from "../../components/common";
 import { useFeedback } from "../../components/Feedback";
 import { formatBytes, relativeTime } from "../../utils/format";
@@ -233,7 +233,7 @@ export function GlanceView() {
   const { toast } = useFeedback();
   const [data, setData] = useState<Glance | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [switching, setSwitching] = useState<string | null>(null); // engine being connected to
+  const switching = useSwitching();
   const busy = !!switching;
   const [now, setNow] = useState(Date.now());
 
@@ -307,9 +307,7 @@ export function GlanceView() {
       if (hash) window.location.hash = hash;
       return;
     }
-    setSwitching(id);
     activateEngine(id, hash).catch((err) => {
-      setSwitching(null);
       switchFailed(err, (m) => toast("error", m));
     });
   };

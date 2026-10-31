@@ -6,7 +6,7 @@
  *     there's no keyboard input: interactive commands (-it, login prompts) belong in the Exec tab.
  */
 import { KeyboardEvent, useCallback, useEffect, useRef, useState } from "react";
-import { Box, Button, IconButton, InputAdornment, Stack, TextField, Tooltip, Typography, useTheme } from "@mui/material";
+import { Box, Button, Chip, FormControlLabel, IconButton, InputAdornment, Stack, Switch, TextField, Tooltip, Typography, useTheme } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import BlockIcon from "@mui/icons-material/Block";
 import StopIcon from "@mui/icons-material/Stop";
@@ -14,9 +14,10 @@ import RefreshIcon from "@mui/icons-material/Refresh";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
-import { dd } from "../../api/ddclient";
+import { api, dd } from "../../api/ddclient";
 import { wsUrl } from "../../api/ws";
 import { splitArgs } from "../../api/compose";
+import { useFeedback } from "../Feedback";
 import { useEngine } from "../../hooks/useEngine";
 import { usePersistentState } from "../../hooks/usePersistentState";
 import { MONO } from "../../theme";
@@ -228,7 +229,7 @@ function DockerConsole() {
 
 // ---- SSH engine: shell on the server ---------------------------------------------------------
 
-function ServerShell() {
+function ServerShell({ onRoot }: { onRoot: (root: boolean) => void }) {
   const { host, term } = useXterm(true);
   const [state, setState] = useState<"connecting" | "open" | "ended" | "error">("connecting");
   const [session, setSession] = useState(0);
@@ -239,6 +240,7 @@ function ServerShell() {
     let disposed = false;
     term.reset();
     setState("connecting");
+    onRoot(false);
     const subs: { dispose: () => void }[] = [];
     (async () => {
       const url = await wsUrl("/ws/host-shell", { cols: String(term.cols), rows: String(term.rows) });
@@ -247,19 +249,24 @@ function ServerShell() {
       sock.binaryType = "arraybuffer";
       sock.onmessage = (ev) => {
         if (typeof ev.data !== "string") return term.write(new Uint8Array(ev.data));
-        const m = JSON.parse(ev.data) as { type: string; message?: string; code?: number };
+        const m = JSON.parse(ev.data) as { type: string; message?: string; code?: number; root?: boolean };
         if (m.type === "ready") {
           setState("open");
+          onRoot(!!m.root);
           term.focus();
         } else if (m.type === "exit") {
           setState("ended");
+          onRoot(false);
           term.write(`\r\n\x1b[2m(shell ended${m.code ? `, exit code ${m.code}` : ""})\x1b[0m\r\n`);
         } else if (m.type === "error") {
           setState("error");
           term.write(`\r\n\x1b[31m${m.message}\x1b[0m\r\n`);
         }
       };
-      sock.onclose = () => setState((s) => (s === "open" || s === "connecting" ? "ended" : s));
+      sock.onclose = () => {
+        setState((s) => (s === "open" || s === "connecting" ? "ended" : s));
+        onRoot(false);
+      };
       const send = (msg: object) => sock?.readyState === WebSocket.OPEN && sock.send(JSON.stringify(msg));
       subs.push(term.onData((data) => send({ type: "input", data })));
       subs.push(term.onResize(({ cols, rows }) => send({ type: "resize", cols, rows })));
@@ -272,7 +279,7 @@ function ServerShell() {
       subs.forEach((s) => s.dispose());
       sock?.close();
     };
-  }, [term, session]);
+  }, [term, session, onRoot]);
 
   return (
     <>
@@ -290,6 +297,45 @@ function ServerShell() {
   );
 }
 
+/** The server's Root terminal switch (per server, off by default). Changing it starts a new session. */
+function useRootTerminal(engineId: string | undefined, remote: boolean) {
+  const { confirm, toast } = useFeedback();
+  const [setting, setSetting] = useState<{ on: boolean; problem: string | null } | null>(null);
+  const [restart, setRestart] = useState(0);
+  useEffect(() => {
+    setSetting(null);
+    if (!remote) return;
+    let current = true;
+    api
+      .get<{ on: boolean; problem: string | null }>("/hostfs/root-terminal")
+      .then((s) => current && setSetting(s))
+      .catch(() => undefined);
+    return () => {
+      current = false;
+    };
+  }, [engineId, remote]);
+  const change = async (on: boolean) => {
+    if (on) {
+      const ok = await confirm({
+        title: "Open this server's terminal as root?",
+        message:
+          "The terminal will start a privileged helper container on this server and open a root shell on the server itself, not in a container. Whatever you type runs as root, with no password and without the server's sudo rules or sudo log. Use it only if you may be root on this server. Everything started in this terminal ends when it closes or loses its connection, tmux and nohup too, so a long job like a system upgrade can be left half done: start those with systemd-run. The shell you have open now ends.",
+        confirmLabel: "Use root terminal",
+        destructive: true,
+      });
+      if (!ok) return;
+    }
+    try {
+      await api.put("/hostfs/root-terminal", { allow: on, engine: engineId });
+      setSetting((s) => s && { ...s, on });
+      setRestart((n) => n + 1);
+    } catch (e) {
+      toast("error", (e as Error).message);
+    }
+  };
+  return { setting, restart, change };
+}
+
 // ---- panel -------------------------------------------------------------------------------------
 
 export function TerminalPanel({ onClose }: { onClose: () => void }) {
@@ -297,6 +343,8 @@ export function TerminalPanel({ onClose }: { onClose: () => void }) {
   const meta = engine?.engine;
   const remote = meta?.type === "ssh";
   const [height, setHeight] = usePersistentState("terminal.height", 280);
+  const { setting, restart, change } = useRootTerminal(meta?.id, remote);
+  const [isRoot, setIsRoot] = useState(false);
   const drag = useRef<{ y: number; h: number } | null>(null);
 
   const onMove = useCallback(
@@ -330,7 +378,24 @@ export function TerminalPanel({ onClose }: { onClose: () => void }) {
         <Typography variant="body2" color="text.secondary" noWrap>
           {remote ? meta?.target : "Local engine (Rancher Desktop)"}
         </Typography>
+        {isRoot && <Chip size="small" color="error" label="root" />}
         <Box sx={{ flex: 1 }} />
+        {remote && setting && (
+          <Tooltip
+            title={
+              setting.problem ??
+              "Open this server's terminal as root, through a privileged helper container. Remembered for this server. Your account can do this because it may use Docker there. When the terminal closes or loses its connection, everything started in it ends, tmux and nohup too; for long jobs use systemd-run."
+            }
+          >
+            <span>
+              <FormControlLabel
+                control={<Switch size="small" checked={setting.on} disabled={!!setting.problem && !setting.on} onChange={(e) => void change(e.target.checked)} />}
+                label="Root terminal"
+                sx={{ mr: 0.5 }}
+              />
+            </span>
+          </Tooltip>
+        )}
         <Tooltip title="Close terminal">
           <IconButton onClick={onClose} aria-label="Close terminal">
             <CloseIcon fontSize="small" />
@@ -338,7 +403,7 @@ export function TerminalPanel({ onClose }: { onClose: () => void }) {
         </Tooltip>
       </Stack>
       {/* A different engine is a different session. */}
-      {remote ? <ServerShell key={meta?.id} /> : dd ? <DockerConsole key={meta?.id ?? "local"} /> : <ConsoleUnavailable />}
+      {remote ? <ServerShell key={`${meta?.id}-${restart}`} onRoot={setIsRoot} /> : dd ? <DockerConsole key={meta?.id ?? "local"} /> : <ConsoleUnavailable />}
     </Box>
   );
 }

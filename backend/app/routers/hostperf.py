@@ -3,14 +3,14 @@
 import asyncio
 from typing import Literal
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from app.services import hostfs, hostperf
 from app.services.fsbrowse import FsError
 from app.services.watch import watch
 
-router = APIRouter(prefix="/hostperf", tags=["hostperf"])
+router = APIRouter(prefix="/hostperf", tags=["hostperf"], dependencies=[Depends(hostfs.bind_request)])
 
 
 async def _do(coro):
