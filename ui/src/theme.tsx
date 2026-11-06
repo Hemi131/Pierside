@@ -1,12 +1,10 @@
 /**
- * Theme provider. `@docker/docker-mui-theme` only reads options that Docker Desktop injects
- * (`window.__ddMuiV5Themes`); Rancher doesn't inject them. So we use them when present and
- * otherwise fall back to our own Docker Desktop–like light/dark theme.
+ * Theme provider: always our own Docker Desktop–like light/dark theme. Rancher Desktop ≥ 1.25
+ * injects `window.__ddMuiV5Themes`, but only with `palette.mode` and a `palette.docker` colour
+ * ramp, so switching to it would leave MUI's stock defaults (huge headings, uppercase buttons).
  */
 import { ReactNode, useMemo } from "react";
 import { createTheme, ThemeOptions, ThemeProvider, useMediaQuery } from "@mui/material";
-
-type Bag = { light: ThemeOptions; dark: ThemeOptions };
 
 const FONT = `"Roboto", "Segoe UI", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif`;
 export const MONO = `"Roboto Mono", "Cascadia Mono", Consolas, "SFMono-Regular", Menlo, monospace`;
@@ -73,10 +71,6 @@ function options(mode: "light" | "dark"): ThemeOptions {
 
 export function AppThemeProvider({ children }: { children: ReactNode }) {
   const prefersDark = useMediaQuery("(prefers-color-scheme: dark)", { noSsr: true });
-  const theme = useMemo(() => {
-    const injected = (window as unknown as { __ddMuiV5Themes?: Bag }).__ddMuiV5Themes;
-    const mode = prefersDark ? "dark" : "light";
-    return createTheme(injected?.[mode] ?? options(mode));
-  }, [prefersDark]);
+  const theme = useMemo(() => createTheme(options(prefersDark ? "dark" : "light")), [prefersDark]);
   return <ThemeProvider theme={theme}>{children}</ThemeProvider>;
 }

@@ -4,6 +4,10 @@ Each release of Pierside, newest first. Install a specific one with `rdctl exten
 
 ## Unreleased
 
+## 1.4.1 - 2026-11-06
+
+- Rancher Desktop 1.25: the extension lost its own look (very large headings, uppercase buttons, default colours) because Rancher now provides a minimal theme of its own. Pierside uses its own theme again.
+
 ## 1.4.0 - 2026-10-31
 
 - **Root terminal** (SSH engines): a switch in the terminal's header opens that server's terminal as root, through a privileged helper container. Off by default, remembered per server, and it asks before turning on. See [Remote engines](docs/remote-engines.md#root-terminal).
