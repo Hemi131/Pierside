@@ -6,21 +6,37 @@
  *     Active from the marker until the user presses Enter; the next prompt re-arms it.
  *   - Where does the editable command line start? A buffer marker at the prompt line (tracks
  *     scrolling and reflow) plus the cursor column when the marker arrived.
+ *
+ * With `guess` (the server terminal, whose shell gets no marker) and no marker seen, the prompt is
+ * recognised instead: the command line starts after the first "$ ", "# ", "> ", "% ", "❯ " or "» " on
+ * the cursor's line. No such prompt there (another prompt style, or a program running): no prompt, so
+ * nothing is edited by guesswork.
  */
 import type { IMarker, Terminal } from "@xterm/xterm";
-import { rowEndCol } from "./cells";
+import { rowCells, rowEndCol } from "./cells";
 
 export class PromptTracker {
   /** At least one marker was seen: the shell supports integration. */
   seen = false;
-  /** Prompt is waiting for input (no command running). */
-  active = false;
+  private markedActive = false;
   private marker: IMarker | null = null;
   private startCol = 0;
+  /** The farthest the cursor has been (absolute offset): typed spaces at the end leave nothing to see. */
+  private farthest = -1;
 
-  constructor(private t: Terminal) {
+  /** Prompt is waiting for input (no command running). */
+  get active(): boolean {
+    return this.seen ? this.markedActive : this.guess && this.guessStart() !== null;
+  }
+
+  constructor(
+    private t: Terminal,
+    private guess = false,
+  ) {
     t.onCursorMove(() => {
-      if (this.expected !== null && this.realCursorAbs() === this.expected) this.expected = null;
+      const at = this.realCursorAbs();
+      if (this.expected !== null && at === this.expected) this.expected = null;
+      if (at > this.farthest) this.farthest = at;
     });
     t.parser.registerOscHandler(133, (data) => {
       if (data.startsWith("B")) {
@@ -28,7 +44,7 @@ export class PromptTracker {
         this.marker = t.registerMarker(0);
         this.startCol = t.buffer.active.cursorX;
         this.seen = true;
-        this.active = true;
+        this.markedActive = true;
         this.expected = null;
       }
       return true; // swallow: never rendered
@@ -37,7 +53,8 @@ export class PromptTracker {
 
   /** The user submitted the line: a command (or program) runs until the next prompt. */
   commandStarted() {
-    this.active = false;
+    this.markedActive = false;
+    this.farthest = -1; // the next command line starts afresh (e.g. after `clear` it can be on the same row)
   }
 
   private get cols() {
@@ -50,8 +67,26 @@ export class PromptTracker {
 
   /** Absolute cell offset (row * cols + col) where the command line starts, or null without a prompt. */
   private startAbs(): number | null {
-    if (!this.active || !this.marker || this.marker.isDisposed || this.marker.line < 0) return null;
+    if (!this.seen) return this.guess ? this.guessStart() : null;
+    if (!this.markedActive || !this.marker || this.marker.isDisposed || this.marker.line < 0) return null;
     return this.abs(this.marker.line, this.startCol);
+  }
+
+  /** Without a marker: just after the prompt on the cursor's line (see the top), or null. */
+  private guessStart(): number | null {
+    const b = this.t.buffer.active;
+    if (b.type === "alternate") return null;
+    let row = b.baseY + b.cursorY;
+    while (row > 0 && b.getLine(row)?.isWrapped) row--; // a long command line wraps onto more rows
+    const cells = rowCells(b.getLine(row), this.cols);
+    const text = cells.join("");
+    const m = /[$#>%❯»] /u.exec(text);
+    if (!m) return null;
+    // From the text's index back to a column (rowCells gives one string per cell).
+    let col = 0;
+    for (let len = 0; col < cells.length && len < m.index + m[0].length; col++) len += cells[col].length;
+    const start = this.abs(row, col);
+    return start <= this.realCursorAbs() ? start : null;
   }
 
   /**
@@ -65,7 +100,10 @@ export class PromptTracker {
     let row = Math.max(startRow, b.baseY + b.cursorY);
     while (b.getLine(row + 1)?.isWrapped) row++;
     const lineEnd = rowEndCol(b.getLine(row), this.cols);
-    return Math.max(this.abs(row, lineEnd), row === startRow ? start : 0);
+    // Spaces typed at the end are blank cells: the line goes at least as far as the cursor went on
+    // this row (the cursor may have moved back since, e.g. while selecting by word).
+    const far = this.farthest >= start && Math.floor(this.farthest / this.cols) === row ? this.farthest : 0;
+    return Math.max(this.abs(row, lineEnd), far, row === startRow ? start : 0);
   }
 
   /** Editable command line as absolute offsets, or null when no prompt is being edited. */

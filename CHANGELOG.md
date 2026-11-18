@@ -4,6 +4,12 @@ Each release of Pierside, newest first. Install a specific one with `rdctl exten
 
 ## Unreleased
 
+## 1.4.3 - 2026-11-18
+
+- Terminals: **Ctrl+S** no longer freezes the shell. It used to stop all output until Ctrl+Q (the terminal's old flow control), which looked like a hung shell. Full-screen programs such as `nano` still get it.
+- Terminals (the server terminal of an SSH engine and a container's shell): **right click** works as in Windows Terminal: it copies the selected text, or pastes when nothing is selected.
+- The server terminal of an SSH engine edits the command line by word, as a container's shell already did: **Ctrl+Backspace** and **Ctrl+Delete** delete a word, **Ctrl+Left** / **Ctrl+Right** move by word, and text is selected with **Shift+arrows**, by word with **Ctrl+Shift+Left** / **Right**, or to the line's ends with **Shift+Home** / **End** (then **Ctrl+C** copies it). On the command line a selection works as in an editor: **Left** / **Right** go to its start / end, **Backspace** / **Delete** remove it, typing or pasting replaces it, and **Ctrl+X** cuts it (the command line is found after a prompt ending in `$`, `#`, `>` or `%`). Full-screen programs such as `vim` or `top` still get the keys unchanged.
+
 ## 1.4.2 - 2026-11-18
 
 - **Alerts no longer spam.** A problem is reported once while it goes on, with a reminder every two hours, instead of again every few minutes for each kind of trouble: a restart loop that also makes the container unhealthy is one alert, and a Swarm service whose tasks all fail (for example an image that doesn't exist) is one alert, not one per replica. Alerts arriving together are one message, desktop notifications come at most every 30 seconds, and the message has **Mute 1 h** and **Pause all 15 min**. See [Alerts](docs/alerts.md#how-often).

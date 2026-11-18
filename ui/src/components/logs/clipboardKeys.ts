@@ -9,6 +9,7 @@ import { report } from "../../diagnostics";
  *   Ctrl+C        copies when text is selected (then clears the selection); otherwise sends ^C (SIGINT)
  *   Ctrl+Shift+C  always copies the selection (never sends ^C)
  *   Ctrl+V / Ctrl+Shift+V  paste
+ *   right click   copies the selection (then clears it), or pastes when nothing is selected
  * read-only (Logs):
  *   Ctrl+C / Ctrl+Shift+C copy the selection, Ctrl+A selects everything
  * Cmd is treated like Ctrl on macOS.
@@ -41,6 +42,24 @@ export function clipboardKeyHandler(t: Terminal, opts: ClipboardOpts): (e: Keybo
     }
   };
   t.element?.addEventListener("paste", onNativePaste, true);
+  // Right click, like Windows Terminal: copies the selection (and clears it), or pastes when nothing is
+  // selected. Instead of the browser's menu, which has nothing useful for a terminal.
+  if (opts.interactive) {
+    t.element?.addEventListener(
+      "contextmenu",
+      (e) => {
+        e.preventDefault();
+        e.stopPropagation(); // xterm's own handler would prepare the browser's menu
+        if (t.hasSelection()) {
+          const text = t.getSelection();
+          void copyText(text).then(() => opts.onCopy?.(text));
+          t.clearSelection();
+        } else paste();
+        t.focus();
+      },
+      true,
+    );
+  }
 
   const paste = () => {
     suppressNativePasteUntil = Date.now() + 1000;

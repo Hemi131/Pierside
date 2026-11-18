@@ -22,7 +22,9 @@ import { useEngine } from "../../hooks/useEngine";
 import { usePersistentState } from "../../hooks/usePersistentState";
 import { MONO } from "../../theme";
 import { xtermTheme } from "../logs/xtermTheme";
-import { attachClipboardKeys } from "../logs/clipboardKeys";
+import { clipboardKeyHandler } from "../logs/clipboardKeys";
+import { terminalKeyHandler } from "../shell/terminalKeys";
+import { PromptTracker } from "../shell/promptTracker";
 
 /** An xterm filling its box, refitted on resize. */
 function useXterm(interactive: boolean) {
@@ -30,6 +32,10 @@ function useXterm(interactive: boolean) {
   const host = useRef<HTMLDivElement>(null);
   const [term, setTerm] = useState<Terminal | null>(null);
   const fit = useRef<FitAddon | null>(null);
+  // The clipboard keys, made once (they also listen for paste and right click): a session adds its own
+  // keys in front of them.
+  const clip = useRef<((e: globalThis.KeyboardEvent) => boolean) | null>(null);
+  const beforePaste = useRef<(() => void) | null>(null); // set by a session: e.g. delete a selected part first
   useEffect(() => {
     if (!host.current) return;
     const t = new Terminal({
@@ -44,7 +50,9 @@ function useXterm(interactive: boolean) {
     const f = new FitAddon();
     t.loadAddon(f);
     t.open(host.current);
-    attachClipboardKeys(t, { interactive });
+    const keys = clipboardKeyHandler(t, { interactive, beforePaste: () => beforePaste.current?.() });
+    clip.current = keys;
+    t.attachCustomKeyEventHandler(keys);
     if (!interactive) t.write("\x1b[?25l"); // no cursor in the output area
     fit.current = f;
     const ro = new ResizeObserver(() => {
@@ -62,7 +70,7 @@ function useXterm(interactive: boolean) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  return { host, term };
+  return { host, term, clip, beforePaste };
 }
 
 const box = { flex: 1, minHeight: 0, position: "relative", "& .xterm": { height: "100%", p: 1 }, "& .xterm-viewport": { bgcolor: "transparent !important" } } as const;
@@ -229,8 +237,17 @@ function DockerConsole() {
 
 // ---- SSH engine: shell on the server ---------------------------------------------------------
 
+// One per terminal, kept across its sessions: it hooks into the terminal when made. A server's shell
+// sends no prompt markers, so the prompt is recognised by its usual ending (see PromptTracker).
+const prompts = new WeakMap<Terminal, PromptTracker>();
+function promptOf(t: Terminal): PromptTracker {
+  let p = prompts.get(t);
+  if (!p) prompts.set(t, (p = new PromptTracker(t, true)));
+  return p;
+}
+
 function ServerShell({ onRoot }: { onRoot: (root: boolean) => void }) {
-  const { host, term } = useXterm(true);
+  const { host, term, clip, beforePaste } = useXterm(true);
   const [state, setState] = useState<"connecting" | "open" | "ended" | "error">("connecting");
   const [session, setSession] = useState(0);
 
@@ -270,6 +287,24 @@ function ServerShell({ onRoot }: { onRoot: (root: boolean) => void }) {
       const send = (msg: object) => sock?.readyState === WebSocket.OPEN && sock.send(JSON.stringify(msg));
       subs.push(term.onData((data) => send({ type: "input", data })));
       subs.push(term.onResize(({ cols, rows }) => send({ type: "resize", cols, rows })));
+      // The keys of a container's shell: editing by word (Ctrl+Backspace / Delete / Left / Right) and
+      // selecting with Shift (by word with Ctrl+Shift, to the line's ends with Shift+Home / End).
+      const prompt = promptOf(term);
+      // Dev-only hook for browser tests (stripped from production builds).
+      if (import.meta.env.DEV) (window as unknown as { __dsServerShell?: Terminal }).__dsServerShell = term;
+      const edit = terminalKeyHandler(term, (data) => send({ type: "input", data }), prompt);
+      term.attachCustomKeyEventHandler((e) => edit(e) && (clip.current?.(e) ?? true));
+      // Pasting over a selection in the command line replaces it, as typing does.
+      beforePaste.current = () => {
+        const keys = term.hasSelection() ? prompt.deleteSelectionKeys() : null;
+        if (keys) {
+          send({ type: "input", data: keys });
+          term.clearSelection();
+        }
+        prompt.resetExpected();
+      };
+      subs.push({ dispose: () => (beforePaste.current = null) });
+      subs.push({ dispose: () => clip.current && term.attachCustomKeyEventHandler(clip.current) });
     })().catch((e) => {
       setState("error");
       term.write(`\x1b[31m${(e as Error).message}\x1b[0m\r\n`);

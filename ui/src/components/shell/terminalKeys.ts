@@ -12,7 +12,8 @@
  *   Shift+Left/Right/Up/Down     extend by character / line, starting at the cursor
  *   Ctrl+Shift+Left/Right        extend by word
  *   Shift+Home / Shift+End       extend to start / end of the line
- * Then Ctrl+C (or Ctrl+Shift+C) copies. Any other key ends keyboard selection.
+ * Then Ctrl+C (or Ctrl+Shift+C) copies, and Ctrl+X cuts (deletes it when it is in the command line).
+ * Any other key ends keyboard selection.
  *
  * With shell integration (see promptTracker.ts), a selection inside the command line behaves like
  * in an editor: the shell's cursor follows the moving end while selecting (clamped to the command
@@ -23,6 +24,7 @@
 import type { Terminal } from "@xterm/xterm";
 import type { PromptTracker } from "./promptTracker";
 import { rowCells, rowEndCol } from "./cells";
+import { copyText } from "../../utils/format";
 
 type Send = (data: string) => void;
 
@@ -99,6 +101,14 @@ export function terminalKeyHandler(t: Terminal, send: Send, prompt: PromptTracke
     // "prompt" unless a full-screen program switched to the alternate screen.
     const atPrompt = prompt.seen ? prompt.active : !alternate;
 
+    // Ctrl+S sends XOFF: the terminal stops showing anything until Ctrl+Q, which looks like a hung
+    // shell (usually pressed out of habit, to save). Not sent outside full-screen programs, where
+    // it is a command of the program (nano saves with it).
+    if (e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey && e.key.toLowerCase() === "s" && !alternate) {
+      e.preventDefault();
+      return false;
+    }
+
     // ---- keyboard selection (Shift + navigation keys) ----
     const nav = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"].includes(e.key);
     if (e.shiftKey && nav && !e.altKey && !e.metaKey && !alternate) {
@@ -166,7 +176,8 @@ export function terminalKeyHandler(t: Terminal, send: Send, prompt: PromptTracke
         return false;
       }
     }
-    if (bare && (e.key === "ArrowUp" || e.key === "ArrowDown")) t.clearSelection(); // history
+    // Up / Down (history), Home / End: the shell moves the cursor; the selection goes, as in an editor.
+    if (bare && ["ArrowUp", "ArrowDown", "Home", "End"].includes(e.key)) t.clearSelection();
 
     if (e.key === "Enter" && !e.shiftKey) prompt.commandStarted();
 
@@ -189,12 +200,37 @@ export function terminalKeyHandler(t: Terminal, send: Send, prompt: PromptTracke
       }
     }
 
+    // Ctrl+X with a selection: cut, as in an editor (copied, and deleted when it is in the command line;
+    // output can't be deleted, so it is only copied). Without a selection ^X goes to the shell (bash's
+    // Ctrl+X prefix, e.g. Ctrl+X Ctrl+E to edit the command in an editor).
+    if (e.ctrlKey && !e.altKey && !e.metaKey && !e.shiftKey && e.key.toLowerCase() === "x" && !alternate && t.hasSelection()) {
+      void copyText(t.getSelection());
+      const keys = prompt.active ? prompt.deleteSelectionKeys() : null;
+      if (keys) send(keys);
+      t.clearSelection();
+      e.preventDefault();
+      return false;
+    }
+
+    // Ctrl+Backspace / Ctrl+Delete with a selection in the command line delete just the selection.
+    const ctrlOnly = e.ctrlKey && !e.altKey && !e.metaKey && !e.shiftKey;
+    if (ctrlOnly && prompt.active && t.hasSelection() && (e.key === "Backspace" || e.key === "Delete")) {
+      const keys = prompt.deleteSelectionKeys();
+      if (keys) {
+        send(keys);
+        t.clearSelection();
+        e.preventDefault();
+        return false;
+      }
+    }
+
     // Any other key moves the real cursor in ways we don't predict (selection edits above still
     // needed the prediction, e.g. Backspace right after fast Shift+Left presses).
     prompt.resetExpected();
 
     // ---- word-wise line editing (prompt only) ----
     if (atPrompt && e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey && EDIT[e.key]) {
+      t.clearSelection(); // Ctrl+Left / Right move a word from where the selection ended, and it goes
       send(EDIT[e.key]);
       e.preventDefault();
       return false;
