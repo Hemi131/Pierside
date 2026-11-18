@@ -4,6 +4,11 @@ Each release of Pierside, newest first. Install a specific one with `rdctl exten
 
 ## Unreleased
 
+## 1.4.2 - 2026-11-18
+
+- **Alerts no longer spam.** A problem is reported once while it goes on, with a reminder every two hours, instead of again every few minutes for each kind of trouble: a restart loop that also makes the container unhealthy is one alert, and a Swarm service whose tasks all fail (for example an image that doesn't exist) is one alert, not one per replica. Alerts arriving together are one message, desktop notifications come at most every 30 seconds, and the message has **Mute 1 h** and **Pause all 15 min**. See [Alerts](docs/alerts.md#how-often).
+- **Cancel switch on a slow server:** pressed after Pierside had already connected (an overloaded server answers slowly, so the switch can finish while you reach for the button), it used to do nothing, and you then waited for the slow server to load. Now it takes you back to the engine you came from. Leaving a slow server is also quicker: Pierside waits at most 10 seconds to clean up there.
+
 ## 1.4.1 - 2026-11-06
 
 - Rancher Desktop 1.25: the extension lost its own look (very large headings, uppercase buttons, default colours) because Rancher now provides a minimal theme of its own. Pierside uses its own theme again.

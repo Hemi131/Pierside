@@ -9,7 +9,23 @@ While Pierside is open it watches the active engine and tells you about problems
 | **Keeps restarting** | A container exited by itself three times within five minutes and Docker started it again each time. |
 | **Swarm task keeps failing** | The same task of a Swarm service failed three times within five minutes, on any node. |
 
-Each one appears as a message at the bottom of the window. The same problem is not repeated for five minutes; a restart loop that just goes on is repeated every half hour.
+Each one appears as a message at the bottom right of the window.
+
+## How often
+
+Pierside tells you about a problem once, not about every failure:
+
+- **While it goes on, it stays quiet.** A container that was reported isn't reported again, for any reason, while it keeps failing: a container in a restart loop also turns unhealthy after each start, and that isn't a second alert. A Swarm service is one alert, however many of its tasks fail.
+- **A reminder every two hours** if it never stops, saying how long it has been going on.
+- **After fifteen minutes without a failure the problem is over.** If it starts again after that, it is reported again.
+- **Alerts arriving together are one message** ("3 alerts"), not a queue of messages one after another. The message stays while the pointer is on it.
+
+In the message:
+
+- **Mute 1 h** silences what the message is about (that container, by its name, so also when it is recreated; that Swarm service; that engine) for an hour. **Mute these 1 h** does that for every alert in a message with several.
+- **Pause all 15 min** silences every alert for a quarter of an hour, for example while you are fixing the problem.
+
+Both also silence the desktop notifications, and last when you switch engines.
 
 ## Restart loops
 
@@ -26,7 +42,7 @@ On the Containers page, a container that is restarting or unhealthy also shows i
 
 ## Swarm services
 
-A failing Swarm task is replaced by a new one each time, possibly on another node, so Pierside looks at the service's tasks instead of at single containers, twice a minute. It reports a service when the same task slot (for a global service: the same node) failed or was rejected three times within five minutes, and gives Swarm's reason, for example a non-zero exit code or an image that can't be found. Several replicas of a service each finishing once is not reported. This needs the active engine to be a Swarm manager.
+A failing Swarm task is replaced by a new one each time, possibly on another node, so Pierside looks at the service's tasks instead of at single containers, twice a minute. It reports a service when the same task slot (for a global service: the same node) failed or was rejected three times within five minutes, and gives Swarm's reason, for example a non-zero exit code or an image that can't be found. Several replicas of a service each finishing once is not reported. When several of a service's tasks keep failing, as with an image that doesn't exist, it is one alert for the service. The same Swarm added as more than one engine (several managers) is reported once. This needs the active engine to be a Swarm manager.
 
 ## Server alerts
 
@@ -41,7 +57,7 @@ A short spike isn't reported. The same alert comes again after half an hour at t
 
 ## Desktop notifications
 
-Click the version number in the bottom bar and switch on **Desktop notifications for container problems**. Pierside then also shows a notification of your operating system for each alert. Switching it on shows a sample, so you can see that it works on your computer.
+Click the version number in the bottom bar and switch on **Desktop notifications for container problems**. Pierside then also shows a notification of your operating system for each alert, at most one every 30 seconds: alerts in between come together in the next one. Switching it on shows a sample, so you can see that it works on your computer.
 
 - **In Rancher Desktop** the notification is shown by Rancher Desktop itself. Its title is always "Warning" or "Error"; the text starts with "Pierside" and says what happened and on which engine. Clicking it does nothing. It appears for every alert, also while you are looking at Pierside.
 - **In the separate window** it is your browser's notification, which asks for permission once. Clicking it goes to the container's logs or the service. It appears only when the Pierside window isn't the one in front.

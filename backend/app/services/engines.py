@@ -42,7 +42,7 @@ SWITCH_CANCELLED = "Switch cancelled"  # the UI recognises this answer
 RETRY_AFTER_FAILURE = 5  # s: a failed connect is the answer for everyone asking meanwhile
 # Clean-up on the engine being left (shells, helpers) may not hold a switch up for long; when that
 # engine is unreachable already there is nothing to reach, so the switch only waits briefly.
-CLEANUP_TIMEOUT = 30
+CLEANUP_TIMEOUT = 10  # a slow or overloaded server: what is left is removed the next time
 CLEANUP_TIMEOUT_UNREACHABLE = 3
 
 

@@ -62,6 +62,9 @@ export class SwitchCancelled extends Error {}
 
 // One switch at a time in this window, whichever page started it, and every page shows the same one.
 let switchingTo: string | null = null;
+// Cancel was pressed. If the switch connected before that arrived (the backend can't stop it once
+// connected), it goes back to where it came from as soon as it is done.
+let cancelPressed = false;
 const listeners = new Set<() => void>();
 
 function setSwitching(id: string | null): void {
@@ -85,19 +88,36 @@ export function useSwitching(): string | null {
 export async function activateEngine(id: string, hash = "#/containers"): Promise<void> {
   if (switchingTo) throw new Error("Another engine switch is running: wait for it or cancel it first.");
   setSwitching(id);
+  cancelPressed = false;
+  let from: string | undefined;
   try {
+    from = (await api.get<EngineList>("/engines")).active?.id;
     await api.post(`/engines/${encodeURIComponent(id)}/activate`);
   } catch (e) {
     setSwitching(null);
     throw (e as Error).message === "Switch cancelled" ? new SwitchCancelled("Switch cancelled") : e;
   }
+  if (cancelPressed && from && from !== id) {
+    // Cancelled too late to stop it: back to where it came from, rather than staying (and loading) there.
+    setSwitching(from);
+    try {
+      await api.post(`/engines/${encodeURIComponent(from)}/activate`);
+    } catch {
+      /* it stays on the new engine; the reload below shows which one is active */
+    }
+    window.location.reload();
+    return;
+  }
   window.location.hash = hash;
   window.location.reload();
 }
 
-/** Stop this window's switch while it is still connecting (an offline server would hold it until the time limit). */
+/** Stop this window's switch. While it still connects (an offline or overloaded server can hold it until
+ *  the time limit) it stops at once; when it has connected already, it goes back once it is done. */
 export async function cancelSwitch(): Promise<void> {
-  if (switchingTo) await api.post("/engines/switch/cancel", { engine: switchingTo });
+  if (!switchingTo) return;
+  cancelPressed = true;
+  await api.post("/engines/switch/cancel", { engine: switchingTo });
 }
 
 /** Show a failed switch, unless it was cancelled. */
