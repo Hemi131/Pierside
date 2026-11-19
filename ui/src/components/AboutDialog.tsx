@@ -136,6 +136,10 @@ export function VersionFooter() {
             />
           )}
           <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+            <Link component="button" onClick={() => openExternal("https://pierside.dev")} sx={{ verticalAlign: "baseline" }}>
+              pierside.dev
+            </Link>
+            {" · "}
             <Link component="button" onClick={() => openExternal("https://github.com/Hemi131/Pierside")} sx={{ verticalAlign: "baseline" }}>
               github.com/Hemi131/Pierside
             </Link>

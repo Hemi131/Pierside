@@ -4,6 +4,10 @@ Each release of Pierside, newest first. Install a specific one with `rdctl exten
 
 ## Unreleased
 
+## 1.4.4 - 2026-11-19
+
+- **Website:** Pierside has its own site, [pierside.dev](https://pierside.dev), with an overview of what it does, the installation guide, the documentation (with search) and this changelog. Pierside's About dialog (click the version in the footer) links to it.
+
 ## 1.4.3 - 2026-11-18
 
 - Terminals: **Ctrl+S** no longer freezes the shell. It used to stop all output until Ctrl+Q (the terminal's old flow control), which looked like a hung shell. Full-screen programs such as `nano` still get it.

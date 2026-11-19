@@ -2,6 +2,8 @@
 
 A Docker Desktop–style container UI for [Rancher Desktop](https://rancherdesktop.io/). It installs as a Rancher Desktop extension and adds a **Pierside** tab where you manage containers, images, volumes and more, on your own machine or on remote servers over SSH.
 
+**Website and documentation: [pierside.dev](https://pierside.dev)**
+
 Pierside is an independent open-source project. It is not affiliated with Docker, Inc. or SUSE.
 
 ![Containers list grouped by Compose project](docs/images/containers.png)
@@ -51,6 +53,8 @@ The `docker pull` matters: Rancher Desktop installs from the image already on yo
 - **AI access:** a built-in MCP server lets an assistant such as Claude Code work with your engines within limits you set, from reading one project's logs up to nearly everything this window can do, with your approval in Pierside instead of a stored secret. One click adds a connection to Claude Code or Devin CLI.
 
 ## Documentation
+
+Also on [pierside.dev](https://pierside.dev), with search.
 
 - [Install and update](docs/install-and-update.md)
 - [Remote engines over SSH](docs/remote-engines.md)
