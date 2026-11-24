@@ -87,7 +87,7 @@ _DEBUG_LAUNCH = (
 
 async def _debug_helper(target: str) -> str:
     """Start a helper sharing the target's PID + network namespaces; returns its id."""
-    from app.services.helper import HELPER_IMAGE, HELPER_LABEL, _ensure_image
+    from app.services.helper import HELPER_IMAGE, HELPER_LABEL, _ensure_image, helper_labels
 
     info = await get_docker().containers.container(target).show()
     if not (info.get("State") or {}).get("Running"):
@@ -97,7 +97,7 @@ async def _debug_helper(target: str) -> str:
         {
             "Image": HELPER_IMAGE,
             "Cmd": ["sleep", "3600"],  # AutoRemove + this timeout: gone even if the backend dies
-            "Labels": {HELPER_LABEL: "true", f"{HELPER_LABEL}.debug": info["Id"]},
+            "Labels": helper_labels(**{f"{HELPER_LABEL}.debug": info["Id"]}),
             "HostConfig": {
                 "AutoRemove": True,
                 "PidMode": f"container:{info['Id']}",
@@ -127,7 +127,7 @@ def _int(v: str | None, default: int) -> int:
 async def _kill_via_container(docker, pid: int, sig: int) -> None:
     """`kill` from a short-lived container in the engine host's PID namespace (remote engines), on the
     engine of the session (`docker`), not whichever is active by now."""
-    from app.services.helper import HELPER_IMAGE, HELPER_LABEL
+    from app.services.helper import HELPER_IMAGE, helper_labels
 
     try:
         try:
@@ -138,7 +138,7 @@ async def _kill_via_container(docker, pid: int, sig: int) -> None:
             {
                 "Image": HELPER_IMAGE,
                 "Cmd": ["kill", f"-{int(sig)}", str(int(pid))],
-                "Labels": {HELPER_LABEL: "true"},
+                "Labels": helper_labels(),
                 "NetworkDisabled": True,
                 "HostConfig": {"PidMode": "host", "AutoRemove": True, "NetworkMode": "none"},
             }

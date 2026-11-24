@@ -19,6 +19,7 @@ from app.services.forwards import forwards
 from app.services.selfport import discover_public_port
 from app.services.helper import remove_all_helpers
 from app.services.mcp_access import clients as mcp_clients
+from app.services.mcp_scripts import remove_sandboxes
 from app.services.updates import start_image_cleanup
 from app.services.watch import watch
 from app.ws import events, exec as exec_ws, hostshell, logs, pull, stats
@@ -32,6 +33,7 @@ async def lifespan(_app: FastAPI):
     await engines.startup()
     await forwards.startup()
     await remove_all_helpers()  # stale helpers from a previous run
+    await remove_sandboxes()  # script sandboxes (on the local engine, whatever engine is active)
     start_image_cleanup()  # images left behind by earlier versions
     watch.start()
     yield
@@ -40,6 +42,7 @@ async def lifespan(_app: FastAPI):
     await forwards.shutdown()
     await mcp_clients.shutdown()
     await remove_all_helpers()
+    await remove_sandboxes()
     await close_docker()
 
 

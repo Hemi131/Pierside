@@ -29,6 +29,7 @@ const DECIDED: Record<string, string> = {
   week: "Assistant trusted for 7 days",
   month: "Assistant trusted for 30 days",
   always: "Assistant trusted always",
+  allow: "Allowed",
 };
 
 /** One question. A session's questions share an id (there is one at a time), so the id alone would
@@ -44,6 +45,7 @@ export function AccessPrompt() {
   const [requests, setRequests] = useState<AccessRequest[]>([]);
   const [busy, setBusy] = useState(false);
   const [longer, setLonger] = useState<HTMLElement | null>(null);
+  const [showScript, setShowScript] = useState(false);
   const answered = useRef(new Set<string>());
 
   const stopped = useRef(false);
@@ -85,8 +87,9 @@ export function AccessPrompt() {
 
   if (!req) return null;
 
-  const answer = async (decision: "deny" | "deny_pause" | "allow" | "once" | "session" | "permanent" | Exclude<Trust, "none">) => {
+  const answer = async (decision: "deny" | "deny_pause" | "allow" | "allow_kind" | "once" | "session" | "permanent" | Exclude<Trust, "none">) => {
     setLonger(null);
+    setShowScript(false);
     setBusy(true);
     let stale = false;
     try {
@@ -95,7 +98,7 @@ export function AccessPrompt() {
       await api.post(`/mcp-access/requests/${encodeURIComponent(req.id)}`, { decision, createdAt: req.createdAt });
       // Not after each call's confirmation (those can come one after another); the grants are the ones
       // that last, so a wrong click there is told at once.
-      if (req.kind !== "call") {
+      if (req.kind === "session" || req.kind === "access") {
         const what = req.kind === "access" && req.items?.length ? `: ${req.items.join("; ")}` : ` (${req.profile})`;
         toast(decision.startsWith("deny") ? "info" : "success", `${DECIDED[decision] ?? decision}${what}`);
       }
@@ -111,11 +114,63 @@ export function AccessPrompt() {
 
   const call = req.kind === "call";
   const access = req.kind === "access";
+  const script = req.kind === "script";
+  const plan = req.kind === "plan";
+  const codeBox = (code: string, maxHeight: number) => (
+    <Box component="pre" sx={{ mt: 1, mb: 0, p: 1.5, borderRadius: 1, bgcolor: "action.hover", fontFamily: MONO, fontSize: 12.5, whiteSpace: "pre", overflow: "auto", maxHeight }}>
+      {code}
+    </Box>
+  );
   return (
-    <Dialog open maxWidth={access ? "sm" : "xs"} fullWidth>
-      <DialogTitle>{access ? "Give the assistant more access?" : call ? "Allow this action?" : "Allow an AI assistant?"}</DialogTitle>
+    <Dialog open maxWidth={script || plan ? "md" : access ? "sm" : "xs"} fullWidth>
+      <DialogTitle>
+        {access ? "Give the assistant more access?" : script ? "Run this script?" : plan ? "Allow the script's changes?" : call ? "Allow this action?" : "Allow an AI assistant?"}
+      </DialogTitle>
       <DialogContent>
-        {access ? (
+        {script ? (
+          <>
+            <Typography>
+              An assistant using <b>{req.profile}</b> (code <b style={{ fontFamily: MONO }}>{req.code}</b>) wants to run this script:
+            </Typography>
+            {codeBox(req.script ?? "", 380)}
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5 }}>
+              It runs in a sandbox on this computer and can only call the tools this connection allows; each call is checked like a direct one, and changes are asked
+              about as the connection says.
+            </Typography>
+          </>
+        ) : plan ? (
+          <>
+            <Typography>
+              A script of an assistant using <b>{req.profile}</b> ran once without changing anything. These are the changes it would make; if you allow them, it runs
+              again and may make only the changes listed here:
+            </Typography>
+            <Box component="ul" sx={{ mt: 1, mb: 0, pl: 2.5, maxHeight: 260, overflow: "auto" }}>
+              {(req.items ?? []).map((item, i) => (
+                <Typography component="li" key={`${i}-${item}`} sx={{ fontFamily: MONO, fontSize: 12.5, fontWeight: 600, wordBreak: "break-word" }}>
+                  {item}
+                </Typography>
+              ))}
+            </Box>
+            {(req.also ?? []).length > 0 && (
+              <>
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                  Also made, which this connection doesn't ask about:
+                </Typography>
+                <Box component="ul" sx={{ mt: 0.5, mb: 0, pl: 2.5, maxHeight: 160, overflow: "auto" }}>
+                  {(req.also ?? []).map((item, i) => (
+                    <Typography component="li" key={`${i}-${item}`} color="text.secondary" sx={{ fontFamily: MONO, fontSize: 12.5, wordBreak: "break-word" }}>
+                      {item}
+                    </Typography>
+                  ))}
+                </Box>
+              </>
+            )}
+            <Button size="small" sx={{ mt: 1 }} onClick={() => setShowScript((v) => !v)}>
+              {showScript ? "Hide the script" : "Show the script"}
+            </Button>
+            {showScript && codeBox(req.script ?? "", 300)}
+          </>
+        ) : access ? (
           <>
             <Typography>
               An assistant using <b>{req.profile}</b> asks for more than that connection allows:
@@ -143,7 +198,8 @@ export function AccessPrompt() {
         ) : call ? (
           <>
             <Typography>
-              An assistant using <b>{req.profile}</b> wants to <b>{toolText(req.tool)}</b>
+              {req.via ? <>A script ({req.via}) of an assistant using </> : <>An assistant using </>}
+              <b>{req.profile}</b> wants to <b>{toolText(req.tool)}</b>
               {req.target ? (
                 <>
                   {" on "}
@@ -199,10 +255,19 @@ export function AccessPrompt() {
               Allow this session
             </Button>
           </>
-        ) : call ? (
-          <Button variant="contained" disabled={busy || held} onClick={() => void answer("allow")}>
-            Allow
-          </Button>
+        ) : call || script || plan ? (
+          <>
+            {call && req.kindOption && (
+              <Tooltip title="This call and the script's later calls of the same kind, until the script ends">
+                <Button variant="outlined" disabled={busy || held} onClick={() => void answer("allow_kind")}>
+                  Allow all &quot;{toolText(req.tool)}&quot; of this script
+                </Button>
+              </Tooltip>
+            )}
+            <Button variant="contained" disabled={busy || held} onClick={() => void answer("allow")}>
+              {script ? "Run" : plan ? "Allow these changes" : "Allow"}
+            </Button>
+          </>
         ) : (
           <>
             <Button variant="outlined" disabled={busy || held} endIcon={<ArrowDropDownIcon />} onClick={(e) => setLonger(e.currentTarget)}>

@@ -20,7 +20,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from app.services import hostfs
 from app.services.docker_client import get_docker
 from app.services.engines import engines
-from app.services.helper import HELPER_IMAGE, HELPER_LABEL, _ensure_image
+from app.services.helper import HELPER_IMAGE, HELPER_LABEL, _ensure_image, helper_labels
 from app.ws.common import accept_authorized
 
 router = APIRouter()
@@ -97,7 +97,7 @@ class _RootShell:
             {
                 "Image": HELPER_IMAGE,
                 "Cmd": ["sleep", str(ROOT_HELPER_MAX_S)],
-                "Labels": {HELPER_LABEL: "true", f"{HELPER_LABEL}.rootshell": "true"},
+                "Labels": helper_labels(**{f"{HELPER_LABEL}.rootshell": "true"}),
                 "NetworkDisabled": True,
                 "HostConfig": {"Privileged": True, "PidMode": "host", "NetworkMode": "none", "AutoRemove": True},
             }

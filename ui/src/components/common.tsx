@@ -141,8 +141,9 @@ export function EmptyState({ icon, title, children }: { icon?: ReactNode; title:
 
 export function PageHeader({ title, subtitle, actions }: { title: ReactNode; subtitle?: ReactNode; actions?: ReactNode }) {
   return (
-    <Stack direction="row" alignItems="flex-start" justifyContent="space-between" sx={{ mb: 2 }}>
-      <Box>
+    // In a narrow window the actions move below the title (right-aligned) instead of squeezing their labels onto several lines.
+    <Stack direction="row" alignItems="flex-start" justifyContent="space-between" flexWrap="wrap" useFlexGap columnGap={2} rowGap={1} sx={{ mb: 2 }}>
+      <Box sx={{ flex: "1 1 300px", minWidth: 0 }}>
         <Typography variant="h2">{title}</Typography>
         {subtitle && (
           <Typography variant="body1" color="text.secondary" sx={{ mt: 0.5 }}>
@@ -150,7 +151,7 @@ export function PageHeader({ title, subtitle, actions }: { title: ReactNode; sub
           </Typography>
         )}
       </Box>
-      {actions}
+      {actions && <Box sx={{ flexShrink: 0, ml: "auto", maxWidth: "100%", "& .MuiButton-root": { whiteSpace: "nowrap" } }}>{actions}</Box>}
     </Stack>
   );
 }

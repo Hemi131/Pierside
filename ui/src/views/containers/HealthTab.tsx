@@ -77,7 +77,7 @@ export function HealthTab({ id, active }: { id: string; active: boolean }) {
         Check command
       </Typography>
       <Box sx={{ fontFamily: MONO, fontSize: 12, p: 1, mb: 2, borderRadius: 1, bgcolor: "action.hover", wordBreak: "break-all" }}>{testCommand(cfg?.Test)}</Box>
-      <Paper variant="outlined">
+      <Paper variant="outlined" sx={{ overflowX: "auto" }}>
         <Table size="small">
           <TableHead>
             <TableRow>

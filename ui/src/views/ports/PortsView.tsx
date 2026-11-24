@@ -40,7 +40,7 @@ function Section({ title, hint, children }: { title: string; hint?: string; chil
           {hint}
         </Typography>
       )}
-      <Paper variant="outlined">{children}</Paper>
+      <Paper variant="outlined" sx={{ overflowX: "auto" }}>{children}</Paper>
     </Box>
   );
 }

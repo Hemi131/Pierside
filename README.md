@@ -50,7 +50,7 @@ The `docker pull` matters: Rancher Desktop installs from the image already on yo
 - **Remote engines:** manage Docker on other machines over SSH; give each a colour so production is hard to miss. For such a server Pierside also browses and edits its files (switching to Docker where your user has no permission), shows like `htop` what uses its CPU, memory and disks, by process and container, with alerts when it runs short, and shows what takes its disk space.
 - **Swarm:** stacks, services, tasks, nodes, secrets and configs.
 - **Terminal:** a Docker console for the local engine, a full shell on SSH engines.
-- **AI access:** a built-in MCP server lets an assistant such as Claude Code work with your engines within limits you set, from reading one project's logs up to nearly everything this window can do, with your approval in Pierside instead of a stored secret. One click adds a connection to Claude Code or Devin CLI.
+- **AI access:** a built-in MCP server lets an assistant such as Claude Code work with your engines within limits you set, from reading one project's logs up to nearly everything this window can do, with your approval in Pierside instead of a stored secret. If you allow it, the assistant can also send a short Python script that calls those tools in a sandbox, so a big job takes one step. One click adds a connection to Claude Code or Devin CLI.
 
 ## Documentation
 

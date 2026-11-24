@@ -21,6 +21,7 @@ import {
   Table,
   TableBody,
   TableCell,
+  TableContainer,
   TableHead,
   TableRow,
   Tabs,
@@ -38,6 +39,7 @@ import VerifiedUserOutlinedIcon from "@mui/icons-material/VerifiedUserOutlined";
 import { api } from "../../api/ddclient";
 import { useResource } from "../../hooks/useResource";
 import { PageHeader } from "../../components/common";
+import { useColumnLayout } from "../../components/table/useColumnLayout";
 import { useFeedback } from "../../components/Feedback";
 import { MONO } from "../../theme";
 import { EngineColorPicker } from "../../components/EngineColor";
@@ -363,6 +365,15 @@ export function EnginesView() {
   const [adding, setAdding] = useState(false);
   const switching = useSwitching();
   const [renaming, setRenaming] = useState<EngineEntry | null>(null);
+  // In a narrow window the least telling columns hide first; the actions stay pinned on the right.
+  const layout = useColumnLayout("engines", [
+    { pos: 1, label: "Engine" },
+    { pos: 2, label: "Target", autoHide: 3 },
+    { pos: 3, label: "Connection", autoHide: 1 },
+    { pos: 4, label: "Host key", autoHide: 2 },
+    { pos: 5, label: "Colour", autoHide: 4 },
+    { pos: 6, label: "Actions" },
+  ]);
 
   const activate = async (id: string) => {
     try {
@@ -390,9 +401,12 @@ export function EnginesView() {
         title="Engines"
         subtitle="Manage the local Rancher Desktop engine and remote Docker hosts over SSH. Every view shows the active engine."
         actions={
-          <Button variant="contained" startIcon={<AddIcon />} onClick={() => setAdding(true)}>
-            Add SSH engine
-          </Button>
+          <Stack direction="row" spacing={1} alignItems="center">
+            {layout.columnsButton}
+            <Button variant="contained" startIcon={<AddIcon />} onClick={() => setAdding(true)}>
+              Add SSH engine
+            </Button>
+          </Stack>
         }
       />
       {data?.error && (
@@ -400,8 +414,8 @@ export function EnginesView() {
           The active engine is unreachable: {data.error}
         </Alert>
       )}
-      <Paper variant="outlined">
-        <Table size="small">
+      <TableContainer ref={layout.containerRef} component={Paper} variant="outlined">
+        <Table ref={layout.tableRef} size="small" sx={layout.tableSx}>
           <TableHead>
             <TableRow>
               <TableCell>Engine</TableCell>
@@ -471,7 +485,7 @@ export function EnginesView() {
             ))}
           </TableBody>
         </Table>
-      </Paper>
+      </TableContainer>
       <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
         The SSH user needs access to the Docker socket on the host (member of the <code>docker</code> group, or rootless Docker). That access is equivalent to root on
         that host, so use a dedicated key.

@@ -30,7 +30,7 @@ from app.services import fsbrowse, fswrite
 from app.services.docker_client import get_docker, query_json
 from app.services.engines import DATA_DIR, engines
 from app.services.fsbrowse import FsError
-from app.services.helper import HELPER_IMAGE, HELPER_LABEL, _ensure_image, _remove, busy, lease
+from app.services.helper import HELPER_IMAGE, HELPER_LABEL, _ensure_image, _remove, busy, helper_labels, lease
 from app.services.store import write_json
 
 log = logging.getLogger("pierside.hostfs")
@@ -187,7 +187,7 @@ async def _create(folder: str, writable: bool) -> str:
         "Image": HELPER_IMAGE,
         "Cmd": ["sleep", "3600"],
         "User": "0:0",
-        "Labels": {HELPER_LABEL: "true", f"{HELPER_LABEL}.host": folder, f"{HELPER_LABEL}.mode": "rw" if writable else "ro"},
+        "Labels": helper_labels(**{f"{HELPER_LABEL}.host": folder, f"{HELPER_LABEL}.mode": "rw" if writable else "ro"}),
         "NetworkDisabled": True,
         # A bind mount through Mounts (not Binds) fails for a missing folder instead of creating it.
         "HostConfig": {"AutoRemove": True, "NetworkMode": "none", "Mounts": [{"Type": "bind", "Source": folder, "Target": MOUNT, "ReadOnly": not writable}]},

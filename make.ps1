@@ -1,10 +1,11 @@
 # PowerShell equivalent of the Makefile (make is not installed on this machine).
-# Usage: ./make.ps1 build|install|uninstall|reinstall|dev|logs
+# Usage: ./make.ps1 build|install|uninstall|reinstall|dev|logs|test [-Suite <part of a test file name>]
 param(
-    [Parameter(Position = 0)][ValidateSet("build", "install", "uninstall", "reinstall", "dev", "logs")]
+    [Parameter(Position = 0)][ValidateSet("build", "install", "uninstall", "reinstall", "dev", "logs", "test")]
     [string]$Target = "build",
     [string]$Image = "pierside/extension",
-    [string]$Tag = "dev"
+    [string]$Tag = "dev",
+    [string]$Suite = ""
 )
 # Not "Stop": PowerShell 5.1 turns native stderr (docker build progress) into errors. Exit codes are checked instead.
 $ErrorActionPreference = "Continue"
@@ -19,6 +20,39 @@ function Invoke-Checked([string]$Exe, [string[]]$Arguments) {
 function Build { Invoke-Checked docker @("build", "-t", $Ref, ".") }
 function Uninstall { & rdctl extension uninstall $Ref; $global:LASTEXITCODE = 0 }
 function Install { Invoke-Checked rdctl @("extension", "install", $Ref) }
+
+# Every suite in dev/tests. The Python ones import the backend and use the engine through the socket,
+# so they run in the built image (build it first) with the working copy's backend mounted over the
+# image's; test_logsafe.mjs runs here with Node. live_*.py need the SSH test host and aren't run.
+function Test-All {
+    $testRef = "${Image}:test"
+    # The image plus what the suites need and Pierside doesn't ship (starlette's TestClient needs httpx).
+    "FROM $Ref`nRUN pip install -q httpx==0.28.1" | docker build -q -t $testRef - | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "building $testRef failed (build $Ref first: ./make.ps1 build)" }
+    $root = (Get-Location).Path
+    $suites = @(Get-ChildItem dev/tests -Filter "test_*" | Where-Object { $_.Extension -in ".py", ".mjs" } | Sort-Object Name | ForEach-Object Name)
+    if ($Suite) { $suites = @($suites | Where-Object { $_ -like "*$Suite*" }) }
+    if (-not $suites) { throw "no test suite matches '$Suite'" }
+    $failed = @()
+    foreach ($s in $suites) {
+        Write-Host "==== $s" -ForegroundColor Cyan
+        if ($s.EndsWith(".mjs")) {
+            & node "dev/tests/$s"
+        } else {
+            # /src/app = the backend (imported as `app`); /src/backend/app the same, for suites that load a
+            # module by its repo path (test_alerts); /data a fresh tmpfs, so nothing of the installed
+            # extension is read or changed.
+            & docker run --rm --entrypoint python -v "${root}\backend\app:/src/app:ro" -v "${root}\backend\app:/src/backend/app:ro" `
+                -v "${root}\dev\tests:/t:ro" -v /var/run/docker.sock:/var/run/docker.sock --tmpfs /data -w /src $testRef "/t/$s"
+        }
+        if ($LASTEXITCODE -ne 0) { $failed += $s }
+    }
+    Write-Host ""
+    foreach ($s in $suites) {
+        if ($failed -contains $s) { Write-Host "FAIL $s" -ForegroundColor Red } else { Write-Host "PASS $s" -ForegroundColor Green }
+    }
+    if ($failed) { throw "$($failed.Count) of $($suites.Count) suites failed: $($failed -join ', ')" }
+}
 
 switch ($Target) {
     "build" { Build }
@@ -43,6 +77,7 @@ switch ($Target) {
             Set-Location ..
         }
     }
+    "test" { Test-All }
     "logs" {
         $id = docker ps -q --filter "label=com.docker.compose.service=pierside" | Select-Object -First 1
         if (-not $id) { throw "backend container not running" }

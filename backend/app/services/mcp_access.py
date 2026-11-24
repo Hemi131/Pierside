@@ -61,8 +61,14 @@ ACTIONS = (
     "create",  # create volumes and networks
     "cleanup",  # delete images, volumes, networks; prune
     "swarmctl",  # scale, restart, update, roll back, remove services and stacks
+    "scripts",  # run_script: a script that calls the other tools, each call checked like a direct one
 )
 CONFIRM_MODES = ("all", "destructive", "none")
+# What happens with the changes a script makes where `confirm` would ask (see services/mcp_scripts.py):
+# plan = a planning run records them, the user allows the list, a second run may make only those;
+# kind = asked at the first change of each tool, with "allow the rest of this tool in this run";
+# each = asked per change, like direct calls.
+SCRIPT_WRITES = ("plan", "kind", "each")
 MAX_LOG_LINES = 5000
 AUTH_MODES = ("approval", "token")
 # How long an approval can be remembered ("always" = until the user revokes it).
@@ -87,6 +93,8 @@ class Profile:
     confirm: str = "all"
     enabled: bool = True
     mayAsk: bool = True  # approval mode: the assistant may ask the user for more access (request_access)
+    scriptConfirm: bool = True  # approval mode: show the user each script before it runs
+    scriptWrites: str = "plan"  # approval mode: see SCRIPT_WRITES
     god: bool = False  # everything allowed, on the profile's engines
     hostMounts: bool = False  # with god only: new containers may mount the Docker socket and host system folders
     # write_file / make_folder in a running container without `sh`: through Docker's archive API, which
@@ -310,6 +318,12 @@ class ProfileStore:
             if data["confirm"] not in CONFIRM_MODES:
                 raise ValueError("confirm must be all, destructive or none")
             p.confirm = data["confirm"]
+        if "scriptConfirm" in data:
+            p.scriptConfirm = bool(data["scriptConfirm"])
+        if "scriptWrites" in data:
+            if data["scriptWrites"] not in SCRIPT_WRITES:
+                raise ValueError("scriptWrites must be plan, kind or each")
+            p.scriptWrites = data["scriptWrites"]
         if "trust" in data:
             if data["trust"] not in ("none", "always", *TRUST_SECONDS):
                 raise ValueError("Unknown trust period")
@@ -519,7 +533,12 @@ class Approvals:
             raise KeyError(rid)
         if created_at is None or abs(req["createdAt"] - created_at) > 1e-6:
             raise StaleQuestion(rid)
-        allowed = {"call": ("deny", "allow"), "access": ("deny", "deny_pause", "session", "permanent")}.get(req["kind"], ("deny", "once", "always", *TRUST_SECONDS))
+        allowed = {
+            "call": ("deny", "allow", "allow_kind") if req.get("kindOption") else ("deny", "allow"),
+            "script": ("deny", "allow"),
+            "plan": ("deny", "allow"),
+            "access": ("deny", "deny_pause", "session", "permanent"),
+        }.get(req["kind"], ("deny", "once", "always", *TRUST_SECONDS))
         if decision not in allowed:
             raise ValueError("Unknown answer")
         if req["kind"] == "access":
@@ -549,10 +568,32 @@ class Approvals:
                 profiles.save()
         self._answer(req, decision)
 
-    async def ask(self, profile: Profile, session: str, kind: str, tool: str, target: str, detail: str, grant: dict | None = None, items: list[str] | None = None) -> str:
+    async def ask(
+        self,
+        profile: Profile,
+        session: str,
+        kind: str,
+        tool: str,
+        target: str,
+        detail: str,
+        grant: dict | None = None,
+        items: list[str] | None = None,
+        *,
+        also: list[str] | None = None,
+        script: str = "",
+        via: str | None = None,
+        kind_option: bool = False,
+        wait: float | None = None,
+    ) -> str:
         """Put a question to the user and wait for the answer: the decision, or "timeout".
         kind: session (may this session use the connection), call (may this call run), access (may the
-        session have `grant` on top; `items` describes it for the prompt)."""
+        session have `grant` on top; `items` describes it for the prompt), script (may this script run;
+        `script` is its code), plan (may a script make the changes in `items`; `also`: the changes it
+        makes too, which the confirm setting doesn't ask about, each shown whole).
+        A call from a script names it (`via`); `kind_option` offers the answer "allow_kind" (the rest
+        of this tool's calls in that run). `wait`: at most this long instead of APPROVAL_WAIT_S.
+        A question about one call, script or plan ends with the wait (timed out or cancelled), so a late
+        answer never lets anything run."""
         self._expire()
         key = f"{kind}:{session}" if kind in ("session", "access") else f"call:{secrets.token_hex(6)}"
         req = self._pending.get(key)
@@ -563,16 +604,22 @@ class Approvals:
             req = None
         # The first call of a new session returns quickly, so that the assistant can show the user the
         # code to compare before they answer; the question stays open and later calls wait longer.
-        wait = SESSION_FIRST_WAIT_S if kind == "session" and req is None else APPROVAL_WAIT_S
+        limit = SESSION_FIRST_WAIT_S if kind == "session" and req is None else APPROVAL_WAIT_S
+        if wait is not None:
+            limit = max(0.0, min(limit, wait))
         if req is None:
             req = {"id": key, "kind": kind, "profileId": profile.id, "profile": profile.name, "session": session, "code": session_code(session),
-                   "tool": tool, "target": target, "detail": detail[:500], "grant": grant, "items": items or [], "createdAt": time.time(), "decision": None, "event": asyncio.Event()}
+                   "tool": tool, "target": target, "detail": detail[:500], "grant": grant, "items": items or [], "also": also or [], "script": script, "via": via,
+                   "kindOption": kind_option, "createdAt": time.time(), "decision": None, "event": asyncio.Event()}
             self._pending[key] = req
             _notify("request")  # the prompt appears without waiting for the UI's next check
         try:
-            await asyncio.wait_for(req["event"].wait(), wait)
+            await asyncio.wait_for(req["event"].wait(), limit)
         except asyncio.TimeoutError:
-            if kind == "call" and self._pending.pop(key, None) is not None:  # a late "allow" must not run anything
+            pass
+        finally:
+            # Timed out, or the waiting call was cancelled: a late "allow" must not run anything.
+            if req["decision"] is None and kind not in ("session", "access") and self._pending.pop(key, None) is not None:
                 _notify("expired")
         return req["decision"] or "timeout"
 
@@ -693,12 +740,13 @@ clients = EngineClients()
 
 # ---- activity ----------------------------------------------------------------------------------------
 
-_activity: deque[dict] = deque(maxlen=200)
+_activity: deque[dict] = deque(maxlen=1000)  # a script can make hundreds of calls; each is listed
 
 
-def begin(profile: Profile, tool: str, target: str) -> dict:
-    """A call has arrived: list it as running. Finish it with record(). Kept in memory only (newest last)."""
-    row = {"at": time.time(), "profileId": profile.id, "profile": profile.name, "tool": tool, "target": target, "outcome": "running", "detail": ""}
+def begin(profile: Profile, tool: str, target: str, via: str | None = None) -> dict:
+    """A call has arrived: list it as running. Finish it with record(). Kept in memory only (newest last).
+    `via`: the script that made the call ("script 3fa2"), None for a direct call."""
+    row = {"at": time.time(), "profileId": profile.id, "profile": profile.name, "tool": tool, "target": target, "outcome": "running", "detail": "", "via": via}
     _activity.append(row)
     # Most calls take a few milliseconds; only tell the UI about one that is still going after a moment.
     asyncio.get_running_loop().call_later(0.4, lambda: row["outcome"] in ("running", "waiting") and _notify("activity"))
@@ -713,7 +761,7 @@ def waiting(row: dict, is_waiting: bool) -> None:
 
 
 def record(row: dict, outcome: str, detail: str = "") -> None:
-    """The call is over. outcome: ok | denied | error."""
+    """The call is over. outcome: ok | denied | error | planned (a script's planning run: recorded, not carried out)."""
     row["outcome"], row["detail"], row["seconds"] = outcome, detail[:200], round(time.time() - row["at"], 1)
     if outcome == "denied":
         log.warning("MCP %s denied %s on %r: %s", row["profile"], row["tool"], row["target"], detail)

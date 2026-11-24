@@ -146,7 +146,8 @@ export function ContainersView() {
       />
       <UsageCards />
 
-      <Stack direction="row" alignItems="center" spacing={2} sx={{ mb: 1.5, minHeight: 40 }}>
+      {/* Wraps in a narrow window rather than squeezing the switch's label onto several lines. */}
+      <Stack direction="row" alignItems="center" flexWrap="wrap" useFlexGap columnGap={2} rowGap={1} sx={{ mb: 1.5, minHeight: 40 }}>
         <SearchField value={search} onChange={setSearch} />
         <Tooltip title="Filters">
           <IconButton onClick={(e) => setFilterAnchor(e.currentTarget)} color={showSystem || showExtension || showSwarmHistory ? "primary" : "default"}>
@@ -170,7 +171,8 @@ export function ContainersView() {
         {layout.columnsButton}
         <FormControlLabel
           control={<Switch size="small" checked={onlyRunning} onChange={(e) => setOnlyRunning(e.target.checked)} />}
-          label={<Typography variant="body1">Only show running containers</Typography>}
+          label={<Typography variant="body1" sx={{ whiteSpace: "nowrap" }}>Only show running containers</Typography>}
+          sx={{ ml: 0, mr: 0 }}
         />
         <Box sx={{ flex: 1 }} />
         {selected.size > 0 && (

@@ -38,7 +38,7 @@ Build-only tools (Vite, TypeScript, …) are not shipped. They are MIT, Apache-2
 ## Container images
 
 - The extension image is built on the official `python:3.12-slim` image (Debian). It contains Debian packages under various licenses, some of them GPL. Their sources are available from Debian (https://sources.debian.org).
-- At runtime Pierside may pull `alpine:3.20` for temporary helper containers (volume browsing, and exec cleanup on remote engines).
+- At runtime Pierside may pull `alpine:3.20` for temporary helper containers (for example browsing volumes and server files). The sandbox for AI access scripts is made from the extension's own image.
 - The files in `dev/` are test fixtures and are not part of the extension. They reference `alpine`, `nginx`, `redis` and `docker:dind` images, each under its own license.
 
 ## Trademarks

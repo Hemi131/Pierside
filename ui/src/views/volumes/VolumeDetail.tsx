@@ -107,7 +107,7 @@ export function VolumeDetail({ name, tab }: { name: string; tab?: string }) {
             v.containers.length === 0 ? (
               <EmptyState title="No containers use this volume" />
             ) : (
-              <Paper variant="outlined">
+              <Paper variant="outlined" sx={{ overflowX: "auto" }}>
                 <Table size="small">
                   <TableHead>
                     <TableRow>

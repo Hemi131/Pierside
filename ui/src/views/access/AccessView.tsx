@@ -27,6 +27,7 @@ import {
   Table,
   TableBody,
   TableCell,
+  TableContainer,
   TableHead,
   TableRow,
   Tabs,
@@ -46,6 +47,7 @@ import { api, dd } from "../../api/ddclient";
 import { addToAssistant, Assistant, ASSISTANT_LABEL, canSetUp, installedAssistants, removeFromAssistants } from "../../api/assistants";
 import { useResource } from "../../hooks/useResource";
 import { EmptyState, PageHeader } from "../../components/common";
+import { useColumnLayout } from "../../components/table/useColumnLayout";
 import { useFeedback } from "../../components/Feedback";
 import { usePersistentState } from "../../hooks/usePersistentState";
 import { MONO } from "../../theme";
@@ -72,9 +74,13 @@ type Action =
   | "compose"
   | "create"
   | "cleanup"
-  | "swarmctl";
+  | "swarmctl"
+  | "scripts";
 
 export type Confirm = "all" | "destructive" | "none";
+
+/** What happens with the changes a script makes where `confirm` would ask (backend: SCRIPT_WRITES). */
+export type ScriptWrites = "plan" | "kind" | "each";
 
 export type Trust = "none" | "day" | "week" | "month" | "always";
 
@@ -87,6 +93,9 @@ interface Profile {
   trustAlways: boolean;
   trustedUntil: number | null;
   confirm: Confirm;
+  /** Show the user each script before it runs. */
+  scriptConfirm: boolean;
+  scriptWrites: ScriptWrites;
   enabled: boolean;
   /** Everything allowed, on the connection's engines. */
   god: boolean;
@@ -112,29 +121,43 @@ const RESULT: Record<Activity["outcome"], { label: string; color: "default" | "w
   error: { label: "Failed", color: "error" },
   running: { label: "Running…", color: "info", variant: "outlined" },
   waiting: { label: "Waiting for you", color: "warning", variant: "outlined" },
+  planned: { label: "Planned", color: "info", variant: "outlined" },
 };
 
 interface Activity {
   at: number;
   profile: string;
+  profileId: string;
   tool: string;
   target: string;
-  /** running and waiting (for the user's answer) are calls still under way. */
-  outcome: "ok" | "denied" | "error" | "running" | "waiting";
+  /** running and waiting (for the user's answer) are calls still under way; planned: recorded by a
+   * script's planning run, not carried out. */
+  outcome: "ok" | "denied" | "error" | "running" | "waiting" | "planned";
   detail: string;
+  /** The script that made the call ("script 3fa2"); its run_script row has that as its target. */
+  via?: string | null;
 }
 
 export interface AccessRequest {
   id: string;
-  /** session: may this assistant session use the connection; call: may this call run; access: may the session have more. */
-  kind: "session" | "call" | "access";
-  /** For "access": what is asked for, one line each. */
+  /** session: may this assistant session use the connection; call: may this call run; access: may the
+   * session have more; script: may this script run; plan: may a script make the changes in `items`. */
+  kind: "session" | "call" | "access" | "script" | "plan";
+  /** For "access": what is asked for; for "plan": the changes; one line each. */
   items?: string[];
+  /** For "plan": the changes made too, which the connection's confirm setting doesn't ask about. */
+  also?: string[];
   profile: string;
   code: string;
   tool: string;
   target: string;
   detail: string;
+  /** For "script" and "plan": the script's code. */
+  script?: string;
+  /** A call or plan of a script: which one ("script 3fa2"). */
+  via?: string | null;
+  /** A call of a script in "kind" mode: "allow_kind" is offered too. */
+  kindOption?: boolean;
   createdAt: number;
 }
 
@@ -202,6 +225,18 @@ const ACTION_GROUPS: { title: string; note?: string; actions: ActionInfo[] }[] =
       { key: "swarmctl", label: "Change Swarm services", help: "Scale, restart, change the image, roll back and remove services; remove stacks.", risky: true },
       { key: "create", label: "Create volumes and networks", help: "New named volumes and networks.", risky: true },
       { key: "cleanup", label: "Delete and clean up", help: "Delete images, volumes and networks, and prune what is unused, including the build cache.", risky: true },
+    ],
+  },
+  {
+    title: "Scripts",
+    actions: [
+      {
+        key: "scripts",
+        label: "Run scripts",
+        help:
+          "The assistant can send a short Python script that calls the tools allowed above, so big jobs take one step and only what the script prints comes back. " +
+          "Each call is checked like a direct one. Scripts run in a sandbox on this computer with no network and no access to Docker or your files.",
+      },
     ],
   },
 ];
@@ -459,6 +494,8 @@ interface Form {
   auth: "approval" | "token";
   trust: Trust;
   confirm: Confirm;
+  scriptConfirm: boolean;
+  scriptWrites: ScriptWrites;
 }
 
 const emptyForm: Form = {
@@ -481,6 +518,8 @@ const emptyForm: Form = {
   auth: "approval",
   trust: "none",
   confirm: "all",
+  scriptConfirm: true,
+  scriptWrites: "plan",
 };
 
 const TRUST_LABELS: { value: Trust; label: string }[] = [
@@ -535,6 +574,8 @@ function EditDialog({
             auth: editing.auth,
             trust: editing.trustAlways ? "always" : editing.trustedUntil && editing.trustedUntil * 1000 > Date.now() ? "month" : "none",
             confirm: editing.confirm,
+            scriptConfirm: editing.scriptConfirm !== false,
+            scriptWrites: editing.scriptWrites ?? "plan",
           }
         : emptyForm,
     );
@@ -623,6 +664,8 @@ function EditDialog({
       maxLogLines: Number(f.maxLogLines) || 500,
       auth: f.auth,
       confirm: f.confirm,
+      scriptConfirm: f.scriptConfirm,
+      scriptWrites: f.scriptWrites,
       ...(f.auth === "approval" && (trustTouched || !editing) ? { trust: f.trust } : {}),
     };
     try {
@@ -951,6 +994,43 @@ function EditDialog({
                       <MenuItem value="none">Never</MenuItem>
                     </TextField>
                   )}
+                  {(f.god || has("scripts")) && (
+                    <>
+                      <FormControlLabel
+                        sx={{ alignItems: "flex-start", m: 0, mt: 1.5, display: "flex" }}
+                        control={<Switch size="small" checked={f.scriptConfirm} onChange={(e) => setF({ ...f, scriptConfirm: e.target.checked })} sx={{ mt: 0.25, mr: 1 }} />}
+                        label={
+                          <>
+                            <Typography component="span">Show me each script before it runs</Typography>
+                            <Typography variant="body2" color="text.secondary">
+                              You see the whole script and run or refuse it.
+                            </Typography>
+                          </>
+                        }
+                      />
+                      {anyRisky && f.confirm !== "none" && (
+                        <TextField
+                          select
+                          size="small"
+                          label="Changes a script makes"
+                          value={f.scriptWrites}
+                          onChange={(e) => setF({ ...f, scriptWrites: e.target.value as ScriptWrites })}
+                          sx={{ minWidth: 340, mt: 2, display: "flex" }}
+                          helperText={
+                            f.scriptWrites === "plan"
+                              ? "The script first runs without changing anything; you see every change it would make, and once you allow the list it runs again and may make only those."
+                              : f.scriptWrites === "kind"
+                                ? "Asked at the script's first change of each kind; you can allow the rest of that kind for that script."
+                                : "Asked for each change, as above."
+                          }
+                        >
+                          <MenuItem value="plan">Show me the list of changes first</MenuItem>
+                          <MenuItem value="kind">Ask at the first change of each kind</MenuItem>
+                          <MenuItem value="each">Ask before each change</MenuItem>
+                        </TextField>
+                      )}
+                    </>
+                  )}
                   <FormControlLabel
                     sx={{ alignItems: "flex-start", m: 0, mt: 1.5 }}
                     control={<Switch size="small" checked={f.mayAsk} onChange={(e) => setF({ ...f, mayAsk: e.target.checked })} sx={{ mt: 0.25, mr: 1 }} />}
@@ -996,6 +1076,83 @@ function EditDialog({
   );
 }
 
+const SHOWN_CALLS = 50;
+
+/** Recent calls, newest first. A script's own calls are folded under its run_script row. */
+function ActivityTable({ activity }: { activity: Activity[] }) {
+  const [open, setOpen] = useState<Set<string>>(new Set());
+  const scriptKey = (profileId: string, label: string) => `${profileId}\u0000${label}`;
+  const scripts = new Set(activity.filter((a) => a.tool === "run_script" && a.target).map((a) => scriptKey(a.profileId, a.target)));
+  const nested = new Map<string, Activity[]>();
+  const top: Activity[] = [];
+  for (const a of activity) {
+    const key = a.via ? scriptKey(a.profileId, a.via) : "";
+    if (key && scripts.has(key)) nested.set(key, [...(nested.get(key) ?? []), a]);
+    else top.push(a); // a direct call, or one whose script row is no longer listed
+  }
+  const shown = top.slice(0, SHOWN_CALLS);
+  const flip = (key: string) =>
+    setOpen((cur) => {
+      const next = new Set(cur);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  const row = (a: Activity, key: string, inner: boolean, calls?: Activity[]) => (
+    <TableRow key={key} sx={inner ? { bgcolor: "action.hover" } : undefined}>
+      <TableCell>
+        <Tooltip title={new Date(a.at * 1000).toLocaleString()}>
+          <span>{relativeTime(a.at * 1000)}</span>
+        </Tooltip>
+      </TableCell>
+      <TableCell>{inner ? "" : a.profile}</TableCell>
+      <TableCell sx={{ fontFamily: MONO, fontSize: 12, pl: inner ? 4 : undefined }}>
+        {a.tool}
+        {calls && calls.length > 0 && (
+          <Button size="small" sx={{ ml: 1, minWidth: 0, py: 0, fontSize: 12 }} onClick={() => flip(scriptKey(a.profileId, a.target))}>
+            {open.has(scriptKey(a.profileId, a.target)) ? "hide" : "show"} {calls.length} call{calls.length === 1 ? "" : "s"}
+          </Button>
+        )}
+      </TableCell>
+      <TableCell sx={{ fontFamily: MONO, fontSize: 12, wordBreak: "break-all" }}>{a.target || "—"}</TableCell>
+      <TableCell>
+        <Tooltip title={a.detail}>
+          <Chip size="small" {...(RESULT[a.outcome] ?? { label: a.outcome, color: "default" })} />
+        </Tooltip>
+      </TableCell>
+    </TableRow>
+  );
+  return (
+    <>
+      <Paper variant="outlined" sx={{ maxHeight: 420, overflow: "auto" }}>
+        <Table size="small" stickyHeader>
+          <TableHead>
+            <TableRow>
+              <TableCell sx={{ width: 130 }}>When</TableCell>
+              <TableCell>Connection</TableCell>
+              <TableCell>Tool</TableCell>
+              <TableCell>Target</TableCell>
+              <TableCell>Result</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {shown.flatMap((a, i) => {
+              const key = a.tool === "run_script" && a.target ? scriptKey(a.profileId, a.target) : "";
+              const calls = key ? nested.get(key) ?? [] : undefined;
+              const rows = [row(a, `${a.at}-${i}`, false, calls)];
+              if (key && open.has(key)) rows.push(...(calls ?? []).map((c, j) => row(c, `${a.at}-${i}-${j}`, true)));
+              return rows;
+            })}
+          </TableBody>
+        </Table>
+      </Paper>
+      <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+        The last {shown.length} calls since Pierside started; a script&apos;s calls are listed under it. A call is listed as soon as it arrives.
+      </Typography>
+    </>
+  );
+}
+
 export function AccessView() {
   const { data, error, reload } = useResource<AccessData>("/mcp-access", ["mcp"], 300, 20000);
   const engines = useResource<EngineList>("/engines");
@@ -1003,6 +1160,16 @@ export function AccessView() {
   const [editing, setEditing] = useState<Profile | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [connect, setConnect] = useState<{ profile: Profile; token: string | null } | null>(null);
+  // In a narrow window the least telling columns hide first; the actions stay pinned on the right.
+  const layout = useColumnLayout("ai-connections", [
+    { pos: 1, label: "Connection" },
+    { pos: 2, label: "Engine", autoHide: 2 },
+    { pos: 3, label: "Containers", autoHide: 3 },
+    { pos: 4, label: "Allowed", autoHide: 4 },
+    { pos: 5, label: "Last used", autoHide: 1 },
+    { pos: 6, label: "On" },
+    { pos: 7, label: "Actions" },
+  ]);
 
   const engineName = (id: string) => engines.data?.engines.find((e) => e.id === id)?.name ?? id;
 
@@ -1065,16 +1232,19 @@ export function AccessView() {
         title="AI access"
         subtitle="Let an AI assistant such as Claude Code look at your containers, with limits you set: which containers, which actions, which files."
         actions={
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={() => {
-              setEditing(null);
-              setFormOpen(true);
-            }}
-          >
-            New connection
-          </Button>
+          <Stack direction="row" spacing={1} alignItems="center">
+            {data && data.profiles.length > 0 && layout.columnsButton}
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={() => {
+                setEditing(null);
+                setFormOpen(true);
+              }}
+            >
+              New connection
+            </Button>
+          </Stack>
         }
       />
       {error && !data && (
@@ -1091,8 +1261,8 @@ export function AccessView() {
         </EmptyState>
       ) : (
         data && (
-          <Paper variant="outlined">
-            <Table size="small">
+          <TableContainer ref={layout.containerRef} component={Paper} variant="outlined">
+            <Table ref={layout.tableRef} size="small" sx={layout.tableSx}>
               <TableHead>
                 <TableRow>
                   <TableCell>Connection</TableCell>
@@ -1188,7 +1358,7 @@ export function AccessView() {
                 ))}
               </TableBody>
             </Table>
-          </Paper>
+          </TableContainer>
         )
       )}
 
@@ -1197,41 +1367,7 @@ export function AccessView() {
           <Typography variant="h6" sx={{ mt: 3, mb: 1, fontSize: 15 }}>
             Recent activity
           </Typography>
-          <Paper variant="outlined" sx={{ maxHeight: 420, overflow: "auto" }}>
-            <Table size="small" stickyHeader>
-              <TableHead>
-                <TableRow>
-                  <TableCell sx={{ width: 130 }}>When</TableCell>
-                  <TableCell>Connection</TableCell>
-                  <TableCell>Tool</TableCell>
-                  <TableCell>Target</TableCell>
-                  <TableCell>Result</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {data.activity.slice(0, 50).map((a, i) => (
-                  <TableRow key={`${a.at}-${i}`}>
-                    <TableCell>
-                      <Tooltip title={new Date(a.at * 1000).toLocaleString()}>
-                        <span>{relativeTime(a.at * 1000)}</span>
-                      </Tooltip>
-                    </TableCell>
-                    <TableCell>{a.profile}</TableCell>
-                    <TableCell sx={{ fontFamily: MONO, fontSize: 12 }}>{a.tool}</TableCell>
-                    <TableCell sx={{ fontFamily: MONO, fontSize: 12, wordBreak: "break-all" }}>{a.target || "—"}</TableCell>
-                    <TableCell>
-                      <Tooltip title={a.detail}>
-                        <Chip size="small" {...RESULT[a.outcome]} />
-                      </Tooltip>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </Paper>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-            The last {Math.min(50, data.activity.length)} calls since Pierside started. A call is listed as soon as it arrives.
-          </Typography>
+          <ActivityTable activity={data.activity} />
         </>
       )}
 

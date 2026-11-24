@@ -218,7 +218,7 @@ export function NetworkDetail({ id, tab }: { id: string; tab?: string }) {
                 {canConnect && <Typography>Use Connect container to add one.</Typography>}
               </EmptyState>
             ) : (
-              <Paper variant="outlined">
+              <Paper variant="outlined" sx={{ overflowX: "auto" }}>
                 <Table size="small">
                   <TableHead>
                     <TableRow>

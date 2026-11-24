@@ -97,8 +97,9 @@ class ExecTimeout(ToolError):
 class Ctx:
     profile: Profile  # as it applies to this session (see Approvals.effective)
     engine: str  # engine id the call runs on
-    docker: aiodocker.Docker
+    docker: aiodocker.Docker | None  # None for tools that aren't about one engine (NO_ENGINE)
     session: str = ""  # the assistant session's id (approval-mode connections)
+    row: dict | None = None  # the call's activity row (mcp_access.begin), for a tool that waits for the user
 
     async def get(self, path: str, **params) -> object:
         return await self.docker._query_json(path, params=params or None)
@@ -126,15 +127,17 @@ class Out:
 class Tool:
     name: str
     action: str | None  # the profile action it needs; None = always available
-    level: str  # read | change | destroy
+    level: str  # read | change | destroy | script (run_script: it does what the tools it calls do)
     fn: Callable[[Ctx, dict], Awaitable[Out]]
     description: str
     schema: dict
     out: dict  # JSON Schema of Out.data (MCP outputSchema)
+    describe: Callable[[Profile], str] | None = None  # a description that depends on the profile (run_script)
 
 
 TOOLS: dict[str, Tool] = {}
-NO_ENGINE = ("list_engines", "connection_info", "request_access")  # tools that aren't about one engine
+NO_ENGINE = ("list_engines", "connection_info", "request_access", "run_script")  # tools that aren't about one engine
+NOT_IN_SCRIPTS = ("run_script", "request_access")  # no scripts in scripts; asking for more access is the assistant's
 
 _CONTAINER = {"type": "string", "description": "Container name, as shown by list_containers"}
 _PATH = {"type": "string", "description": "Absolute path"}
@@ -1273,6 +1276,20 @@ def engine_name(engine_id: str) -> str:
     return cfg.name if cfg else engine_id
 
 
+def known_engines() -> list[str]:
+    """Every engine Pierside has, the local one first."""
+    return [LOCAL_ID, *engines.registry.engines]
+
+
+def find_engine(ref, among: list[str]) -> str | None:
+    """The engine of `among` that `ref` names (id, name, or `local`; case doesn't matter)."""
+    wanted = str(ref).strip().lower()
+    for engine_id in among:
+        if wanted in (engine_id.lower(), engine_name(engine_id).lower()) or (engine_id == LOCAL_ID and wanted == "local"):
+            return engine_id
+    return None
+
+
 _ACTION_TEXT = {
     "logs": "read logs",
     "inspect": "see configuration and state",
@@ -1294,6 +1311,7 @@ _ACTION_TEXT = {
     "create": "create volumes and networks",
     "cleanup": "delete images, volumes and networks; prune",
     "swarmctl": "scale, restart, update, roll back and remove Swarm services",
+    "scripts": "run scripts that call these tools (run_script; each call is checked like a direct one)",
 }
 
 
@@ -1318,7 +1336,7 @@ _ACTION_TEXT = {
         logs=_obj(defaultLines=_I, maxLinesPerRequest=_I, containsSearchesOnly=_S),
         environmentValues=_S,
         maxOutputCharacters=_I,
-        userConfirmation=_obj(session=_S, perCall=_S),
+        userConfirmation=_obj(session=_S, perCall=_S, scripts=_S),
     ),
 )
 async def connection_info(cx: Ctx, args: dict) -> Out:
@@ -1361,9 +1379,29 @@ async def connection_info(cx: Ctx, args: dict) -> Out:
             "userConfirmation": {
                 "session": "a stored access token, no question" if p.auth == "token" else ("trusted, no question" if p.trusted() else "the user allows each session in Pierside"),
                 "perCall": "never" if p.auth == "token" or p.confirm == "none" else ("for deleting, overwriting and running commands" if p.confirm == "destructive" else "for every call that changes something"),
+                "scripts": _scripts_text(p),
             },
         }
     )
+
+
+_SCRIPT_WRITES_TEXT = {
+    "plan": "the script first runs with PLANNING = True, where changes are only recorded; the user allows the list, then a second run may make only those changes",
+    "kind": "the user is asked at the first change of each tool and may allow the rest of that tool's calls in the run",
+    "each": "the user is asked for each change, as for direct calls",
+}
+
+
+def _scripts_text(p: Profile) -> str:
+    """How the user is asked about scripts (connection_info)."""
+    if not p.allows("scripts"):
+        return "scripts aren't allowed"
+    if p.auth == "token":
+        return "never asked"
+    shown = "the user sees each script and allows it before it runs" if p.scriptConfirm else "scripts run without being shown first"
+    if p.confirm == "none":
+        return f"{shown}; their calls are never asked about"
+    return f"{shown}; for the changes it makes that the per-call setting asks about, {_SCRIPT_WRITES_TEXT.get(p.scriptWrites, p.scriptWrites)}"
 
 
 def _grant_lines(grant: dict) -> list[str]:
@@ -1399,7 +1437,7 @@ def _names(args: dict, key: str) -> list[str]:
         "containers": {"type": "array", "items": {"type": "string"}, "description": "Container names; * matches any text"},
         "projects": {"type": "array", "items": {"type": "string"}, "description": "Compose project names; * matches any text"},
         "file_paths": {"type": "array", "items": {"type": "string"}, "description": "Absolute path patterns: * within one folder, ** across folders"},
-        "engines": {"type": "array", "items": {"type": "string"}, "description": "Engine names or ids the user mentioned"},
+        "engines": {"type": "array", "items": {"type": "string"}, "description": "Engine names or ids from list_engines (those it lists as not allowed)"},
         "show_env_values": {"type": "boolean", "description": "See the values of environment variables, not only their names"},
     },
     ("reason",),
@@ -1418,11 +1456,10 @@ async def request_access(cx: Ctx, args: dict) -> Out:
         raise ToolError("file_paths must be absolute (start with /)")
     engine_ids = []
     for ref in _names(args, "engines"):
-        wanted = ref.lower()
-        match = [e for e in [LOCAL_ID, *engines.registry.engines] if wanted in (e.lower(), engine_name(e).lower()) or (e == LOCAL_ID and wanted == "local")]
+        match = find_engine(ref, known_engines())
         if not match:
-            raise ToolError(f"Pierside has no engine called {ref!r}")
-        engine_ids.append(match[0])
+            raise ToolError(f"Pierside has no engine called {ref!r} (see list_engines)")
+        engine_ids.append(match)
     never = [x for x in _names(args, "containers") if _never_shared_name(x)] + [x for x in _names(args, "projects") if x.startswith(NEVER_SHARED_PROJECTS)]
     if never:
         raise ToolError(f"{', '.join(never)} can only match containers that are never shared, even when allowed: those of Pierside, other Rancher Desktop extensions and Kubernetes. Leave them out")
@@ -1451,16 +1488,19 @@ async def request_access(cx: Ctx, args: dict) -> Out:
     "list_engines",
     None,
     "read",
-    "List the Docker engines this connection may use (the local one and remote ones over SSH) and whether each can be reached. Every other tool takes an optional `engine` argument to choose one.",
+    "List the Docker engines (the local one and remote ones over SSH): those this connection may use, with whether each can be reached, "
+    "and the others by name only, marked allowed: false. Every other tool takes an optional `engine` argument to choose an allowed one.",
     out=_obj(
         engines=_arr(
             _obj(
                 engine=_S,
                 id=_S,
                 type=_enum("local", "ssh"),
-                default=_B,
+                allowed=_B,
+                access=_opt(_S),
+                default=_opt(_B),
                 address=_opt(_S),
-                reachable=_B,
+                reachable=_opt(_B),
                 dockerVersion=_opt(_null(_S)),
                 os=_opt(_S),
                 error=_opt(_S),
@@ -1472,8 +1512,9 @@ async def list_engines(cx: Ctx, args: dict) -> Out:
     from app.services.mcp_access import clients  # the per-engine connections live there
 
     rows = []
-    for engine_id in cx.profile.engine_ids():
-        row = {"engine": engine_name(engine_id), "id": engine_id, "type": "local" if engine_id == LOCAL_ID else "ssh", "default": engine_id == cx.profile.engine_ids()[0]}
+    allowed = cx.profile.engine_ids()
+    for engine_id in allowed:
+        row = {"engine": engine_name(engine_id), "id": engine_id, "type": "local" if engine_id == LOCAL_ID else "ssh", "allowed": True, "default": engine_id == allowed[0]}
         cfg = engines.registry.engines.get(engine_id)
         if cfg:
             row["address"] = f"{cfg.user}@{cfg.host}:{cfg.port}"
@@ -1485,7 +1526,18 @@ async def list_engines(cx: Ctx, args: dict) -> Out:
             await clients.drop(engine_id)
             row.update(reachable=False, error=str(e) or type(e).__name__)
         rows.append(row)
+    # The others by name only: never connected to, and no address, until the user allows them.
+    for engine_id in known_engines():
+        if engine_id not in allowed:
+            rows.append({"engine": engine_name(engine_id), "id": engine_id, "type": "local" if engine_id == LOCAL_ID else "ssh", "allowed": False, "access": engine_no_permission(cx.profile, engine_id)})
     return _json_out({"engines": rows}, "engines")
+
+
+def engine_no_permission(p: Profile, engine_id: str, named: bool = False) -> str:
+    """What the assistant is told about an engine the connection may not use (list_engines; a call naming it)."""
+    which = f"the engine {engine_name(engine_id)!r}" if named else "this engine"
+    how = f"ask for it with request_access (engines: [{engine_name(engine_id)!r}])" if p.can_ask() else "the user can add it in Pierside under AI access"
+    return f"this connection has no permission for {which}; {how}"
 
 
 @tool(
@@ -3021,8 +3073,30 @@ async def _project_containers(cx: Ctx, ref) -> tuple[str, list[dict]]:
         raise ToolError("Give the project's name (see list_projects)")
     members = [c for c in await _containers(cx) if (c.get("Labels") or {}).get(PROJECT_LABEL) == name]
     if not members:
+        if _remembered_project(cx, name) is not None:
+            how = "bring it up with compose_up" if cx.engine != LOCAL_ID else "the user can bring it up with Compose up in Pierside (Compose doesn't run on the local engine from here)"
+            raise ToolError(f"Compose project {name!r} is down: it has no containers (Pierside remembers where its files are); {how}")
         raise ToolError(f"No Compose project named {name!r} with running or stopped containers is shared with this connection (see list_projects)")
     return name, members
+
+
+# A project's state, in the Containers list's words: down = no containers (remembered from an earlier `up`).
+_PROJECT_STATE = _enum("running", "partly running", "paused", "exited", "down")
+
+
+def _project_state(states: list) -> str:
+    running = sum(1 for s in states if s == "running")
+    if not states:
+        return "down"
+    if running:
+        return "running" if running == len(states) else "partly running"
+    return "paused" if "paused" in states else "exited"
+
+
+def _last_seen(entry: dict) -> str | None:
+    """When Pierside last saw a remembered project's containers (ISO, UTC), if known."""
+    t = entry.get("lastSeen")
+    return datetime.fromtimestamp(t, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ") if isinstance(t, (int, float)) and t > 0 else None
 
 
 def _remembered_project(cx: Ctx, name: str) -> dict | None:
@@ -3043,7 +3117,17 @@ def _remembered_project(cx: Ctx, name: str) -> dict | None:
     out=_obj(
         total=_I,
         projects=_arr(
-            _obj(project=_S, running=_I, containers=_I, services=_strs(), down=_opt(_B), workingDir=_null(_S), configFiles=_null(_S))
+            _obj(
+                project=_S,
+                state=_PROJECT_STATE,
+                running=_I,
+                containers=_I,
+                services=_strs(),
+                down=_opt(_B),  # true: no containers now; the project is remembered from an earlier `up`
+                lastSeen=_opt(_null(_S)),  # down projects: when their containers were last seen (UTC)
+                workingDir=_null(_S),
+                configFiles=_null(_S),
+            )
         ),
         truncated=_TRUNCATED,
     ),
@@ -3055,14 +3139,17 @@ async def list_projects(cx: Ctx, args: dict) -> Out:
         project = labels.get(PROJECT_LABEL)
         if not project:
             continue
-        p = projects.setdefault(project, {"project": project, "running": 0, "containers": 0, "services": [], "workingDir": labels.get(WORKDIR_LABEL), "configFiles": labels.get(CONFIG_FILES_LABEL)})
+        p = projects.setdefault(project, {"project": project, "state": [], "running": 0, "containers": 0, "services": [], "workingDir": labels.get(WORKDIR_LABEL), "configFiles": labels.get(CONFIG_FILES_LABEL)})
         p["containers"] += 1
         p["running"] += int(c.get("State") == "running")
+        p["state"].append(c.get("State"))
         if labels.get(SERVICE_LABEL) and labels[SERVICE_LABEL] not in p["services"]:
             p["services"].append(labels[SERVICE_LABEL])
     for name, entry in composereg.projects(cx.engine).items():
         if name not in projects and _remembered_project(cx, name) is not None:
-            projects[name] = {"project": name, "running": 0, "containers": 0, "services": [], "down": True, "workingDir": entry.get("workingDir"), "configFiles": ",".join(entry.get("configFiles") or [])}
+            projects[name] = {"project": name, "state": [], "running": 0, "containers": 0, "services": [], "down": True, "lastSeen": _last_seen(entry), "workingDir": entry.get("workingDir"), "configFiles": ",".join(entry.get("configFiles") or [])}
+    for p in projects.values():
+        p["state"] = _project_state(p["state"])
     rows = sorted(projects.values(), key=lambda p: p["project"])
     return _list_out(rows, args, "projects", "No Compose projects are shared with this connection on this engine.")
 
@@ -3101,10 +3188,12 @@ async def project_logs(cx: Ctx, args: dict) -> Out:
     ("project",),
     out=_obj(
         project=_S,
+        state=_PROJECT_STATE,
         workingDir=_null(_S),
         configFiles=_strs(),
         note=_S,
         down=_opt(_B),  # true: no containers now; the project is remembered from an earlier `up`
+        lastSeen=_opt(_null(_S)),
         services=_arr(_obj(service=_null(_S), container=_S, image=_null(_S), state=_null(_S), status=_null(_S))),
         truncated=_TRUNCATED,
     ),
@@ -3125,6 +3214,7 @@ async def project_details(cx: Ctx, args: dict) -> Out:
         workdir, files = labels.get(WORKDIR_LABEL), (labels.get(CONFIG_FILES_LABEL) or "").split(",")
     data: dict = {
             "project": name,
+            "state": _project_state([c.get("State") for c in members]),
             "workingDir": workdir,
             "configFiles": files,
             "note": ("The project is down (no containers); Pierside remembers where its files are. " if not members else "")
@@ -3134,6 +3224,7 @@ async def project_details(cx: Ctx, args: dict) -> Out:
         }
     if not members:
         data["down"] = True
+        data["lastSeen"] = _last_seen(entry)
     _bound(data, "services", "services")
     return Out(data, _noted(_dumps({k: v for k, v in data.items() if k != "truncated"}), data))
 
@@ -4757,22 +4848,24 @@ def call_level(name: str, args: dict) -> str:
     return level
 
 
+def allowed_tools(profile: Profile) -> list[Tool]:
+    """The tools this profile may use, in registration order."""
+    return [t for t in TOOLS.values() if (t.action is None or profile.allows(t.action)) and (t.name != "request_access" or profile.can_ask())]
+
+
 def tool_definitions(profile: Profile, structured: bool = False) -> list[dict]:
     """Only the tools this profile may use, so the assistant isn't offered what would be refused.
     `structured`: with each tool's outputSchema. Only for clients that asked for structuredContent: a
     client (the MCP SDK Claude Code uses) fails a call whose tool declares an outputSchema but whose
     result has no structuredContent, and results carry it only for them (routers/mcp.py)."""
     out = []
-    for t in TOOLS.values():
-        if t.action is not None and not profile.allows(t.action):
-            continue
+    for t in allowed_tools(profile):
         schema = t.schema
-        if t.name == "request_access" and not profile.can_ask():
-            continue
         if t.name not in NO_ENGINE:
             # Always offered, also with one engine: a connection for "all engines" gains engines later.
             schema = {**schema, "properties": {**schema["properties"], "engine": _ENGINE_PROP}}
-        entry = {"name": t.name, "description": t.description, "inputSchema": schema, "annotations": {"readOnlyHint": t.level == "read", "destructiveHint": t.level == "destroy"}}
+        # run_script's own level says nothing about what it calls: never read-only, possibly destructive.
+        entry = {"name": t.name, "description": t.describe(profile) if t.describe else t.description, "inputSchema": schema, "annotations": {"readOnlyHint": t.level == "read", "destructiveHint": t.level in ("destroy", "script")}}
         if structured:
             entry["outputSchema"] = t.out
         out.append(entry)

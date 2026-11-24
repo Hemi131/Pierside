@@ -5,10 +5,18 @@ Changes (upload, edit, new file/folder, delete) go through a separate helper tha
 writable, created only when the user changes something. Both are reused while in use, removed after
 HELPER_IDLE_S of inactivity, on backend shutdown, and on startup (stale ones). Safety net if the
 backend dies: helpers run `sleep 3600` with AutoRemove, so they delete themselves.
+
+Every helper that clean-up may remove (label `com.pierside.helper=true`, here and in hostfs, hostperf,
+the debug and root shells) carries its install's id (`helper_labels`), and clean-up removes only this
+install's helpers and unlabelled ones from before owner labels. Another install on the same engine (a
+local build next to the published image, or another computer using the same SSH server) keeps its own,
+even while they are in use; it removes them itself, and their `sleep` is the backstop.
 """
 
 import asyncio
+import json
 import logging
+import os
 import secrets
 import time
 from contextlib import asynccontextmanager
@@ -16,11 +24,15 @@ from contextlib import asynccontextmanager
 import aiodocker
 
 from app.services.docker_client import get_docker, query_json
+from app.services.engines import DATA_DIR
+from app.services.store import keep_unreadable, write_json
 
 log = logging.getLogger("pierside.helper")
 
 HELPER_IMAGE = "alpine:3.20"
 HELPER_LABEL = "com.pierside.helper"
+OWNER_LABEL = f"{HELPER_LABEL}.owner"  # the install that made the helper (install_id)
+INSTALL_FILE = os.path.join(DATA_DIR, "install.json")  # /data is per install (each has its own volume)
 HELPER_IDLE_S = 60
 MOUNT = "/v"
 
@@ -30,6 +42,47 @@ _reaper: asyncio.Task | None = None
 # Helpers in use by a request that outlives helper_for() (a download, an upload, a measurement):
 # container id -> what holds it. The reapers (here and in hostfs.py) leave them alone meanwhile.
 _leases: dict[str, list[str]] = {}
+_install_id: str | None = None
+
+
+def install_id() -> str:
+    """This install's id, kept in /data so that it stays the same across restarts and updates."""
+    global _install_id
+    if _install_id is None:
+        try:
+            with open(INSTALL_FILE, encoding="utf-8") as f:
+                value = json.load(f)["id"]
+            if not isinstance(value, str) or not value:
+                raise ValueError("no id in it")
+            _install_id = value
+        except FileNotFoundError:
+            _install_id = _new_install_id()
+        except (OSError, ValueError, KeyError, TypeError) as e:
+            keep_unreadable(INSTALL_FILE, e)
+            _install_id = _new_install_id()
+    return _install_id
+
+
+def _new_install_id() -> str:
+    value = secrets.token_hex(8)
+    try:
+        write_json(INSTALL_FILE, {"id": value})
+    except OSError as e:
+        # Kept for this run only: after a restart this run's helpers look like another install's and
+        # end by their own `sleep`.
+        log.warning("can't keep this install's id in %s: %s", INSTALL_FILE, e)
+    return value
+
+
+def helper_labels(**extra: str) -> dict:
+    """The labels of a helper that clean-up may remove: helper, owner (this install), and `extra`."""
+    return {HELPER_LABEL: "true", OWNER_LABEL: install_id(), **extra}
+
+
+def _ours(labels: dict | None) -> bool:
+    """Whether clean-up may remove a helper: this install's, or one made before helpers had an owner."""
+    owner = (labels or {}).get(OWNER_LABEL)
+    return owner is None or owner == install_id()
 
 
 def busy(cid: str, kind: str | None = None) -> bool:
@@ -88,7 +141,7 @@ async def _create(volume: str, writable: bool) -> str:
     config = {
         "Image": HELPER_IMAGE,
         "Cmd": ["sleep", "3600"],
-        "Labels": {HELPER_LABEL: "true", f"{HELPER_LABEL}.volume": volume, f"{HELPER_LABEL}.mode": "rw" if writable else "ro"},
+        "Labels": helper_labels(**{f"{HELPER_LABEL}.volume": volume, f"{HELPER_LABEL}.mode": "rw" if writable else "ro"}),
         "NetworkDisabled": True,
         "HostConfig": {
             "AutoRemove": True,
@@ -154,13 +207,13 @@ def forget_helpers() -> None:
 
 
 async def remove_all_helpers() -> None:
-    """Remove every helper container we know of, plus any stale labelled ones."""
+    """Remove every helper container of this install on the active engine (see the module's docstring)."""
     _helpers.clear()
     try:
         stale = await query_json("containers/json", params={"all": "1", "filters": f'{{"label":["{HELPER_LABEL}=true"]}}'})
     except Exception:
         return
-    await asyncio.gather(*(_remove(c["Id"]) for c in stale), return_exceptions=True)
+    await asyncio.gather(*(_remove(c["Id"]) for c in stale if _ours(c.get("Labels"))), return_exceptions=True)
 
 
 async def remove_idle_volume_helpers() -> None:
@@ -174,7 +227,7 @@ async def remove_idle_volume_helpers() -> None:
         found = await query_json("containers/json", params={"all": "1", "filters": f'{{"label":["{HELPER_LABEL}=true"]}}'})
     except Exception:
         return
-    idle = [c["Id"] for c in found if f"{HELPER_LABEL}.volume" in (c.get("Labels") or {}) and not busy(c["Id"])]
+    idle = [c["Id"] for c in found if f"{HELPER_LABEL}.volume" in (c.get("Labels") or {}) and _ours(c.get("Labels")) and not busy(c["Id"])]
     await asyncio.gather(*(_remove(cid) for cid in idle), return_exceptions=True)
 
 

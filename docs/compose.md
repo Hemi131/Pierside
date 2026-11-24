@@ -11,7 +11,7 @@ Click a project to open it:
 
 ## Up, Down and friends
 
-Pierside remembers where each project's Compose files are, separately for each engine, so a project stays listed after `docker compose down` and can be brought up again. The ⋮ menu of a project has:
+Pierside remembers where each project's Compose files are, separately for each engine, so a project stays listed after `docker compose down` and can be brought up again. Such a project has no containers and shows as **Down** (a project whose containers are only stopped shows as **Exited**). The ⋮ menu of a project has:
 
 - **Up** and **Down**: a dialog with the common options (`--build`, `--pull always`, `--force-recreate`, `--remove-orphans`, selected services with `--no-deps`, profiles, env file, extra arguments). It shows the exact command and streams its output. Up always runs detached (`up -d`).
 - **Pull and recreate**: pulls newer images and recreates the containers that use them.

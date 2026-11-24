@@ -65,6 +65,8 @@ For assistants that run unattended and can't wait for a click. The command then 
 
 The assistant is only offered the tools you allowed. It can always list the engines of the connection, the shared containers and their Compose projects, and it can ask what the connection allows (its permissions, file paths and limits), so it doesn't have to find out by trial and error.
 
+The engine list also names the engines the connection may not use, marked as without permission, so the assistant can ask you for one (see [Asking for more](#asking-for-more)). It sees only their names: Pierside doesn't connect to them for the assistant or show their addresses until you allow them.
+
 ### Shared containers
 
 These apply to the containers chosen under **Which containers**.
@@ -144,6 +146,24 @@ When the assistant needs something its connection doesn't allow, it can ask you 
 Decide by the list of what would be allowed. The reason is written by the assistant, and text in a log or a file can talk an assistant into asking. The request waits in Pierside for ten minutes. A new request's allow buttons react only after a moment, so a click meant for the previous question doesn't answer it, and after you answer, a message says what you decided. Pierside's own, extension and Kubernetes containers never match a request, even an allowed one.
 
 The assistant can't ask for **Allow everything**, for mounting host system folders, or to change how it is trusted or when it is asked; those you set yourself. Asking is available for connections you allow in Pierside, not for access tokens, and you can switch it off per connection with **The assistant may ask for more access**.
+
+### Scripts
+
+With **Run scripts** the assistant can send a short Python script instead of calling the tools one by one, for example "read the last 200 log lines of every running container and count the errors". The script calls the same tools, and only what it prints goes back to the assistant, so big jobs take one step and the assistant reads far less.
+
+A script can't do more than the assistant could do call by call. It can use only the permissions, containers, engines and paths of the connection. Every call it makes is checked like a direct one and is listed under **Recent activity**, folded under the script. It runs in a sandbox of its own that is removed afterwards: a container on this computer's engine (also for connections that use only SSH engines), made from Pierside's own image, with no network, no access to Docker or your files, a read-only file system, one CPU and 256 MB. It can make at most 500 tool calls and run for at most 2 minutes (a script whose changes you see as a list first runs twice, at most 1 minute 50 seconds each). Time spent waiting for your answers doesn't count toward that, but everything together, waiting included, ends after 4½ minutes. Permissions you take away from the connection apply to the script's next call. Switching the connection off, removing it, giving it a new token, or taking away **Run scripts** stops the script. If the time runs out while a change is being made, the change isn't cut off halfway: it finishes, and **Recent activity** shows how it ended.
+
+For connections you allow in Pierside, two settings appear once **Run scripts** is ticked:
+
+- **Show me each script before it runs** (on by default): you see the whole script and run or refuse it.
+- **Changes a script makes**, for the changes that **Ask before each action** would ask about:
+    - **Show me the list of changes first** (the default): the script first runs without changing anything. Pierside shows you every change it would make, and once you allow the list, it runs again and may make only those changes, each once and exactly as listed, on the containers the names meant when you allowed the list (if a name has come to mean another container in between, for example after a rename, that change isn't made). If it tries anything else, it is stopped, and the assistant is told which allowed changes were made and which weren't. Changes the setting doesn't ask about are listed as well, apart from the others, and made in the second run; they too are the only ones it may make. A script that changes nothing runs only once.
+    - **Ask at the first change of each kind**: you can allow, for example, all "delete volume" calls of that script at once.
+    - **Ask before each change**: like the assistant's direct calls.
+
+Connections with an access token are never asked, for scripts either.
+
+While a script runs, the assistant's other calls wait for it. Claude Code moves a call that takes longer than two minutes to the background.
 
 ### What the assistant can't do
 

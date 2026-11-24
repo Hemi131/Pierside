@@ -19,14 +19,14 @@ import logging
 import socket
 
 import aiodocker
-import aiohttp
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
 
-from app.services import mcp_tools
-from app.services.engines import LOCAL_ID, LOCAL_URL, EngineError, engines
-from app.services.mcp_access import ACTIONS, APPROVAL_WAIT_S, MAX_LOG_LINES, Profile, StaleQuestion, UnsafePath, activity, approvals, begin, clients, profiles, record, session_code, waiting
+from app.services import mcp_scripts, mcp_tools  # noqa: F401 (mcp_scripts registers run_script)
+from app.services.engines import LOCAL_ID, LOCAL_URL, engines
+from app.services.mcp_access import ACTIONS, MAX_LOG_LINES, Profile, StaleQuestion, activity, approvals, clients, profiles, session_code
+from app.services.mcp_invoke import invoke
 from app.services.updates import VERSION
 
 log = logging.getLogger("pierside.mcp")
@@ -37,7 +37,13 @@ PROTOCOL_VERSIONS = ("2025-06-18", "2025-03-26", "2024-11-05")
 
 def _instructions(p: Profile, session: str) -> str:
     scope = "all containers except those of Pierside, other Rancher Desktop extensions and Kubernetes" if p.all_containers() else "only the containers the user chose"
-    several = " Several engines are available: call list_engines, and pass `engine` to other tools." if len(p.engine_ids()) > 1 else ""
+    several = ""
+    if len(mcp_tools.known_engines()) > 1:
+        several = " Several engines exist: call list_engines, and pass `engine` to other tools."
+        if len(p.engine_ids()) < len(mcp_tools.known_engines()):
+            several += " It also lists engines this connection may not use; " + (
+                "ask for one with request_access if the task needs it." if p.can_ask() else "the user can add one in Pierside under AI access."
+            )
     approval = ""
     if p.auth == "approval" and not approvals.session_ok(p, session):
         approval = (
@@ -56,149 +62,45 @@ def _error(mid, code: int, message: str) -> dict:
     return {"jsonrpc": "2.0", "id": mid, "error": {"code": code, "message": message}}
 
 
-def _engine(profile: Profile, ref) -> str:
-    """The engine a call names (id or name), or the profile's default."""
-    allowed = profile.engine_ids()
-    if not allowed:
-        raise mcp_tools.ToolError("This connection has no engine any more; the user must edit it in Pierside under AI access")
-    if ref in (None, ""):
-        return allowed[0]
-    wanted = str(ref).strip().lower()
-    for engine_id in allowed:
-        if wanted in (engine_id.lower(), mcp_tools.engine_name(engine_id).lower()) or (engine_id == LOCAL_ID and wanted == "local"):
-            return engine_id
-    raise mcp_tools.Denied(f"the engine {ref!r} isn't one this connection may use (see list_engines)")
-
-
-async def _approved(profile: Profile, session: str, name: str, args: dict, target: str, row: dict) -> str | None:
-    """Approval-mode profiles: ask the user where needed. Returns why not, or None to go ahead."""
-    where = "Pierside (Rancher Desktop) under AI access"
-    if not approvals.session_ok(profile, session):
-        waiting(row, True)
-        answer = await approvals.ask(profile, session, "session", name, target, "")
-        waiting(row, False)
-        if answer == "deny":
-            return f"The user refused this connection in {where}."
-        if answer == "timeout":
-            return (
-                f"The user has to allow this connection first. Tell them now, in your reply, that the code is {session_code(session)}: "
-                f"they open {where}, check that the request there shows the same code, and allow it. "
-                "Then call the tool again; that call waits up to a minute for their answer."
-            )
-    level = mcp_tools.call_level(name, args)
-    if (profile.confirm == "all" and level != "read") or (profile.confirm == "destructive" and level == "destroy"):
-        detail = "\n".join(f"{k}: {v}" for k, v in args.items() if k not in ("container", "content") and v not in (None, ""))
-        if "content" in args:
-            detail += f"\ncontent: {len(str(args['content']))} characters"
-        waiting(row, True)
-        answer = await approvals.ask(profile, session, "call", name, target, detail)
-        waiting(row, False)
-        if answer == "deny":
-            return "The user refused this action."
-        if answer == "timeout":
-            return f"The user didn't answer within {APPROVAL_WAIT_S} seconds. Ask them to open {where}, then call the tool again; they are asked each time."
-    return None
-
-
 STRUCTURED_MAX_CHARS = 2 * mcp_tools.MAX_OUTPUT_CHARS  # tools bound their data well below this (mcp_tools._within)
 
 
-def _not_allowed(profile: Profile, session: str) -> str:
-    """Why a tool's permission is missing. After an edit of the connection took back what was allowed
-    for this session only, say so: the tool may have worked a moment ago."""
-    ask = " ask again with request_access if the task still needs it" if profile.can_ask() else " they can allow it in Pierside under AI access"
-    if session and approvals.withdrawn(session):
-        return "the user changed the connection, which withdrew what they had allowed for this session only;" + ask + "."
-    return "the user hasn't allowed this for the connection." + (" Ask for it with request_access if the task needs it." if profile.can_ask() else " They can change that in Pierside under AI access.")
-
-
 async def _call_tool(profile: Profile, session: str, params: dict, structured: bool = False) -> dict:
-    """One tools/call. With `structured`, a successful result also carries the tool's data as
-    `structuredContent` (opt-in, header X-Pierside-Structured: Claude Code shows the model
-    structuredContent instead of the text when both are there, and the text reads better). Errors are
-    text only: a client checks structuredContent against the tool's outputSchema, which describes success."""
-    name, args = params.get("name"), params.get("arguments") or {}
-    entry = mcp_tools.TOOLS.get(name) if isinstance(name, str) else None
-    target = str(args.get("container") or "") if isinstance(args, dict) else ""
-    if isinstance(args, dict):
-        for key in ("project", "volume", "network", "image", "service"):
-            if not target and args.get(key):
-                target = str(args[key])
-        if args.get("path"):
-            target += f":{args['path']}"
+    """One tools/call, carried out by mcp_invoke.invoke and presented here. With `structured`, a
+    successful result also carries the tool's data as `structuredContent` (opt-in, header
+    X-Pierside-Structured: Claude Code shows the model structuredContent instead of the text when both
+    are there, and the text reads better). Errors are text only: a client checks structuredContent
+    against the tool's outputSchema, which describes success."""
+    name = params.get("name")
+    called = await invoke(profile, session, name, params.get("arguments") or {})
 
     def result(text: str, failed: bool) -> dict:
         return {"content": [{"type": "text", "text": text}], "isError": failed}
 
-    if entry is None or not isinstance(args, dict):
-        return result(f"Unknown tool {name!r}", True)
-    args = dict(args)
-    engine_id = profile.engine_ids()[0] if profile.engine_ids() else ""
-    row = begin(profile, name, target)  # shown in the activity list from now, as running
+    if called.outcome != "ok":
+        return result(called.message, True)
+    # The tool has done its work: nothing below may report it as failed.
+    out = called.out
     try:
-        if entry.action is not None and not profile.allows(entry.action):
-            raise mcp_tools.Denied(_not_allowed(profile, session))
-        engine_id = _engine(profile, args.pop("engine", None) if name not in mcp_tools.NO_ENGINE else None)
-        # Reject what the tool doesn't know, rather than ignore it: a misspelt `timeout` must not
-        # quietly run a command with the default limit.
-        unknown = sorted(set(args) - set(entry.schema["properties"]))
-        if unknown:
-            accepted = ", ".join(sorted(entry.schema["properties"]) + ([] if name in mcp_tools.NO_ENGINE else ["engine"]))
-            raise mcp_tools.ToolError(f"Unknown argument{'s' if len(unknown) > 1 else ''} {', '.join(unknown)}. {name} accepts: {accepted}")
-        if len(profile.engine_ids()) > 1 and name not in mcp_tools.NO_ENGINE:
-            target = row["target"] = f"[{mcp_tools.engine_name(engine_id)}] {target}".strip()
-        if profile.auth == "approval":
-            refusal = await _approved(profile, session, name, args, target, row)
-            if refusal:
-                record(row, "denied", refusal)
-                return result(refusal, True)
-        docker = await clients.get(engine_id)
-        if name == "request_access":
-            waiting(row, True)  # the whole call is a question to the user
-        out = await entry.fn(mcp_tools.Ctx(profile, engine_id, docker, session), args)
-        # From here the tool has done its work: nothing below may report it as failed.
-        record(row, "ok")
+        text = mcp_tools.render(out)
+    except Exception as e:  # a bug in the tool's result, after it did its work: never "failed"
+        log.exception("MCP tool %s: its result can't be shown", name)
+        text = f"The call was carried out, but Pierside couldn't show its result ({type(e).__name__}); the user can find details in the backend log."
+    answer = result(text, False)
+    if structured:
+        # Plain JSON within the limit (no default=, never cut): anything else is a bug in the tool.
         try:
-            text = mcp_tools.render(out)
-        except Exception as e:  # a bug in the tool's result, after it did its work: never "failed"
-            log.exception("MCP tool %s: its result can't be shown", name)
-            text = f"The call was carried out, but Pierside couldn't show its result ({type(e).__name__}); the user can find details in the backend log."
-        answer = result(text, False)
-        if structured:
-            # Plain JSON within the limit (no default=, never cut): anything else is a bug in the tool.
-            try:
-                size = len(json.dumps(out.data, allow_nan=False, ensure_ascii=False))  # as the HTTP answer encodes it
-                problem = f"{size} characters, over {STRUCTURED_MAX_CHARS}" if size > STRUCTURED_MAX_CHARS else ""
-            except (TypeError, ValueError) as e:
-                problem = f"not plain JSON: {e}"
-            if problem:
-                log.warning("MCP tool %s: its data can't be sent (%s)", name, problem)
-                # The tool's outputSchema promises data with every success, so this answer is marked an
-                # error, but it says plainly that the call was carried out, so it isn't made again.
-                return result(f"The call was carried out, but Pierside couldn't give its result as structured data ({problem}); this is the result as text:\n{text}", True)
-            answer["structuredContent"] = out.data
-        return answer
-    except (mcp_tools.Denied, UnsafePath) as e:
-        record(row, "denied", str(e))
-        return result(f"Not allowed: {e}", True)
-    except mcp_tools.ToolError as e:
-        record(row, "error", str(e))
-        return result(str(e), True)
-    except aiodocker.DockerError as e:
-        message = e.message if isinstance(e.message, str) else json.dumps(e.message)
-        record(row, "error", message)
-        return result(f"Docker refused: {message}", True)
-    except (EngineError, OSError, aiohttp.ClientError, asyncio.TimeoutError) as e:
-        await clients.drop(engine_id)  # reconnect on the next call
-        record(row, "error", str(e))
-        return result(f"The Docker engine can't be reached: {e or type(e).__name__}", True)
-    except Exception as e:  # a bug in a tool must not take the whole exchange down
-        log.exception("MCP tool %s failed", name)
-        record(row, "error", f"{type(e).__name__}: {e}")
-        return result(f"Pierside hit an internal error running this tool ({type(e).__name__}); the user can find details in the backend log.", True)
-    finally:
-        if row["outcome"] in ("running", "waiting"):  # the request was dropped (the client went away)
-            record(row, "error", "The assistant stopped waiting for the answer")
+            size = len(json.dumps(out.data, allow_nan=False, ensure_ascii=False))  # as the HTTP answer encodes it
+            problem = f"{size} characters, over {STRUCTURED_MAX_CHARS}" if size > STRUCTURED_MAX_CHARS else ""
+        except (TypeError, ValueError) as e:
+            problem = f"not plain JSON: {e}"
+        if problem:
+            log.warning("MCP tool %s: its data can't be sent (%s)", name, problem)
+            # The tool's outputSchema promises data with every success, so this answer is marked an
+            # error, but it says plainly that the call was carried out, so it isn't made again.
+            return result(f"The call was carried out, but Pierside couldn't give its result as structured data ({problem}); this is the result as text:\n{text}", True)
+        answer["structuredContent"] = out.data
+    return answer
 
 
 async def _handle(profile: Profile, session: str, msg, structured: bool = False) -> dict | None:
@@ -247,7 +149,10 @@ async def mcp_endpoint(request: Request):
         body = json.loads(await request.body())
     except ValueError:
         return JSONResponse(_error(None, -32700, "Parse error"), status_code=400)
-    profiles.touch(profile)
+    # Only a tool call is a use (as in Recent activity): the bridge's ping every 30 s, initialize and
+    # tools/list would otherwise keep "Last used" at "just now" for as long as a client is open.
+    if any(isinstance(m, dict) and m.get("method") == "tools/call" for m in (body if isinstance(body, list) else [body])):
+        profiles.touch(profile)
     structured = request.headers.get("x-pierside-structured") == "1"  # the stdio bridge's --structured
     # What applies to this session: the connection plus what the user allowed this session on top.
     # Looked up again for every message and for the stamp, as a call (request_access) can change it.
@@ -297,6 +202,8 @@ class ProfileBody(BaseModel):
     maxLogLines: int | None = None
     auth: str | None = None
     confirm: str | None = None  # all | destructive | none
+    scriptConfirm: bool | None = None
+    scriptWrites: str | None = None  # plan | kind | each
     trust: str | None = None  # none | day | week | month | always
 
 

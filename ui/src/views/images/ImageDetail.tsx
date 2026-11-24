@@ -228,7 +228,7 @@ export function ImageDetail({ imageRef, tab }: { imageRef: string; tab?: string 
             data.containers.length === 0 ? (
               <EmptyState title="No containers use this image" />
             ) : (
-              <Paper variant="outlined">
+              <Paper variant="outlined" sx={{ overflowX: "auto" }}>
                 <Table size="small">
                   <TableHead>
                     <TableRow>

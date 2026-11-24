@@ -4,6 +4,15 @@ Each release of Pierside, newest first. Install a specific one with `rdctl exten
 
 ## Unreleased
 
+## 1.5.0 - 2026-11-25
+
+- **AI access: scripts.** With the new permission **Run scripts** (off by default), an assistant can send a short Python script that calls Pierside's tools, and only what the script prints comes back to it. A job such as "count the errors in the logs of every running container" then takes one step and far less of the assistant's context. Every call the script makes is checked like a direct one. The script runs in a sandbox on this computer with no network and no access to Docker or your files, and you can see each script before it runs. Changes a script makes can be shown to you as a list first, asked about at the first change of each kind, or one by one. See [AI access](docs/ai-access.md#scripts).
+- Two Pierside installs on one engine (for example a local build next to the published one, or two computers using the same SSH server) no longer remove each other's helper containers when they start, stop or switch engines. Before, this could cut off the other install's open volume browser, Server files, debug shell or root terminal.
+- Narrow windows (for example Pierside snapped to half the screen): the AI access connections and the Engines list no longer run off the right edge. Like the Containers list, they hide their less important columns to fit, keep the actions visible, and have a **Columns** button to choose. Page buttons such as **New connection** keep their label on one line and move below the title when there's no room, and the Containers list's **Only show running containers** switch moves below the search box. Smaller tables (details, Ports, Swarm) scroll sideways inside their frame instead of widening the page.
+- AI access: a connection's **Last used** now shows when the assistant last used a tool. Before, it showed "just now" for as long as the assistant was open, because its background checks were counted too.
+- AI access: the assistant's engine list now also names the engines its connection may not use, marked as without permission, so it can ask you for one in Pierside instead of not knowing it exists. It sees only their names, not their addresses, and Pierside doesn't connect to them for it. Naming such an engine in a call now says that permission is missing, not that the engine is unknown.
+- AI access: the assistant now gets each Compose project's state (running, partly running, paused, exited or down) and, for a project that is down, when it was last seen. Asking for the logs of a project that is down, or starting it, now says that it's down and how to bring it up, instead of that there's no such project. In the Containers list, **Down** explains itself when you hover over it.
+
 ## 1.4.5 - 2026-11-24
 
 - **AI access: structured results.** Every tool can also return its result as structured data with a schema, for clients that use MCP's `structuredContent`: add `--structured` to the connection command (see [AI access](docs/ai-access.md#structured-results)). Without it nothing changes for the assistant.

@@ -33,6 +33,9 @@ URL = f"http://127.0.0.1:{TCP_PORT}/mcp"
 
 
 POLL_S = 30
+# How long the bridge waits for the backend's answer to one message. A call may wait for the user's
+# approval, and a script runs within mcp_scripts.WALL_S, which must stay below this.
+HTTP_TIMEOUT_S = 300
 _lock = threading.Lock()  # one writer to stdout at a time
 _busy = threading.Lock()  # held while the client's own message is at the backend
 _state = {"tools": None}  # fingerprint of the tool list as of the last answer
@@ -41,7 +44,7 @@ _state = {"tools": None}  # fingerprint of the tool list as of the last answer
 def _post(auth: dict, line: bytes) -> tuple[int, bytes]:
     req = urllib.request.Request(URL, data=line, method="POST", headers={"Content-Type": "application/json", "Accept": "application/json", **auth})
     try:
-        with urllib.request.urlopen(req, timeout=300) as resp:  # a call may wait for the user's approval
+        with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT_S) as resp:
             status, body, headers = resp.status, resp.read(), resp.headers
     except urllib.error.HTTPError as e:
         status, body, headers = e.code, e.read(), e.headers

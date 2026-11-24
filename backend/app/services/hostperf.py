@@ -38,7 +38,7 @@ import aiodocker
 from app.services import hostfs
 from app.services.docker_client import get_docker, query_json
 from app.services.fsbrowse import FsError
-from app.services.helper import HELPER_IMAGE, HELPER_LABEL, _ensure_image
+from app.services.helper import HELPER_IMAGE, HELPER_LABEL, _ensure_image, helper_labels
 
 log = logging.getLogger("pierside.hostperf")
 
@@ -313,7 +313,7 @@ async def _helper() -> str:
             {
                 "Image": HELPER_IMAGE,
                 "Cmd": ["sleep", "3600"],
-                "Labels": {HELPER_LABEL: "true", f"{HELPER_LABEL}.perf": "true"},
+                "Labels": helper_labels(**{f"{HELPER_LABEL}.perf": "true"}),
                 "NetworkDisabled": True,
                 "HostConfig": {"PidMode": "host", "AutoRemove": True, "NetworkMode": "none", "CapAdd": ["SYS_PTRACE", "SYS_NICE"]},
             }

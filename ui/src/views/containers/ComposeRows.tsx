@@ -98,12 +98,14 @@ export function DownProjectRow({ p, engine, onChanged }: { p: ComposeProject; en
       </TableCell>
       <TableCell />
       <TableCell>
-        <Stack direction="row" spacing={1} alignItems="center">
-          <Box sx={{ width: 8, height: 8, borderRadius: "50%", border: 1.5, borderColor: "text.disabled" }} />
-          <Typography variant="body1" component="span" color="text.secondary">
-            Down
-          </Typography>
-        </Stack>
+        <Tooltip title="No containers (removed by compose down or docker rm). Pierside remembers the compose files; ▶ brings the project up again.">
+          <Stack direction="row" spacing={1} alignItems="center" sx={{ width: "fit-content" }}>
+            <Box sx={{ width: 8, height: 8, borderRadius: "50%", border: 1.5, borderColor: "text.disabled" }} />
+            <Typography variant="body1" component="span" color="text.secondary">
+              Down
+            </Typography>
+          </Stack>
+        </Tooltip>
       </TableCell>
       <TableCell />
       <TableCell align="right">N/A</TableCell>
