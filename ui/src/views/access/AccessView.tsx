@@ -91,6 +91,8 @@ interface Profile {
   /** Everything allowed, on the connection's engines. */
   god: boolean;
   hostMounts: boolean;
+  /** Writes in running containers without sh go through Docker, unchecked for swapped folders. */
+  uncheckedWrites: boolean;
   mayAsk: boolean;
   allEngines: boolean;
   engines: string[];
@@ -172,7 +174,7 @@ const ACTION_GROUPS: { title: string; note?: string; actions: ActionInfo[] }[] =
       {
         key: "exec",
         label: "Run commands",
-        help: "Any shell command inside the containers. This can read and change everything in them, so the file path limits no longer protect anything.",
+        help: "Any shell command inside the containers. This can read and change everything in them, environment values included, so the file path and environment value limits no longer protect anything.",
         risky: true,
       },
     ],
@@ -438,6 +440,8 @@ interface Form {
   name: string;
   god: boolean;
   hostMounts: boolean;
+  /** Writes in running containers without sh go through Docker, unchecked for swapped folders. */
+  uncheckedWrites: boolean;
   mayAsk: boolean;
   allEngines: boolean;
   engines: string[];
@@ -461,6 +465,7 @@ const emptyForm: Form = {
   name: "",
   god: false,
   hostMounts: false,
+  uncheckedWrites: false,
   mayAsk: true,
   allEngines: false,
   engines: ["local"],
@@ -514,6 +519,7 @@ function EditDialog({
             name: editing.name,
             god: editing.god,
             hostMounts: !!editing.hostMounts,
+            uncheckedWrites: !!editing.uncheckedWrites,
             mayAsk: editing.mayAsk !== false,
             allEngines: editing.allEngines,
             engines: editing.engines,
@@ -542,6 +548,23 @@ function EditDialog({
   const noEngine = !f.allEngines && f.engines.length === 0;
   const valid = !!f.name.trim() && (f.god || !badPath) && !noEngine;
   const engineList = engines?.engines ?? [{ id: "local", name: "Local (Rancher Desktop)" }];
+  // A sub-option of "Change files": under it in the list of permissions, under "Allow everything" when that hides the list.
+  const noShellWrites = (sx: object) => (
+    <FormControlLabel
+      sx={{ alignItems: "flex-start", display: "flex", ...sx }}
+      control={<Checkbox size="small" checked={f.uncheckedWrites} onChange={(e) => setF({ ...f, uncheckedWrites: e.target.checked })} sx={{ pt: 0.5 }} />}
+      label={
+        <>
+          <Typography component="span">Also write to running containers that have no shell</Typography>
+          <Typography variant="body2" color={f.uncheckedWrites ? "warning.main" : "text.secondary"}>
+            Containers without sh (distroless images, for example) are then written through Docker, which can't check that a folder wasn't just
+            replaced by a symbolic link: a process in such a container could send the write elsewhere in it. When off, the assistant can write to
+            them only while they are stopped.
+          </Typography>
+        </>
+      }
+    />
+  );
   const toggleEngine = (id: string) => setF((cur) => ({ ...cur, engines: cur.engines.includes(id) ? cur.engines.filter((x) => x !== id) : [...cur.engines, id] }));
   const anyRisky = f.god || ACTIONS.some((a) => a.risky && has(a.key));
 
@@ -587,6 +610,7 @@ function EditDialog({
       name: f.name.trim(),
       god: f.god,
       hostMounts: f.god && f.hostMounts,
+      uncheckedWrites: (f.god || f.actions.includes("filewrite")) && f.uncheckedWrites,
       mayAsk: f.mayAsk,
       allEngines: f.allEngines,
       engines: f.engines,
@@ -603,8 +627,15 @@ function EditDialog({
     };
     try {
       if (editing) {
-        const r = await api.put<{ profile: Profile; token: string | null }>(`/mcp-access/${editing.id}`, body);
-        toast("success", `${body.name} saved`);
+        const r = await api.put<{ profile: Profile; token: string | null; withdrawnSessionGrants?: number }>(`/mcp-access/${editing.id}`, body);
+        // An edit ends what was allowed for single sessions only (backend: Approvals.forget_grants).
+        const n = r.withdrawnSessionGrants ?? 0;
+        toast(
+          n ? "info" : "success",
+          n
+            ? `${body.name} saved. ${n === 1 ? "One assistant session" : `${n} assistant sessions`} lost the access you allowed for that session only; ${n === 1 ? "it" : "they"} can ask again.`
+            : `${body.name} saved`,
+        );
         // Switching to a token creates one, and switching away needs a new command: show it.
         onSaved(r.token || editing.auth !== f.auth ? r : null);
       } else {
@@ -658,6 +689,8 @@ function EditDialog({
                 }
               />
             )}
+            {/* "Allow everything" hides the list of permissions, so this sub-option of Change files shows here instead. */}
+            {f.god && noShellWrites({ mt: 1.5 })}
           </Box>
 
           <Box>
@@ -841,6 +874,7 @@ function EditDialog({
                     label="Also show the values of environment variables (they often hold passwords)"
                   />
                 )}
+                {a.key === "filewrite" && has("filewrite") && noShellWrites({ ml: 3 })}
                 {a.key === "files" && (has("files") || has("filewrite")) && (
                   <TextField
                     label="Allowed paths"
@@ -1095,6 +1129,7 @@ export function AccessView() {
                           <>
                             <Chip size="small" color="error" label="Everything" />
                             {p.hostMounts && <Chip size="small" color="error" variant="outlined" label="Host system mounts" />}
+                            {p.uncheckedWrites && <Chip size="small" color="warning" variant="outlined" label="Writes without sh" />}
                           </>
                         ) : (
                           <>
@@ -1109,6 +1144,7 @@ export function AccessView() {
                                 <Chip size="small" variant="outlined" label={`+${p.actions.length - 4} more`} />
                               </Tooltip>
                             )}
+                            {p.uncheckedWrites && p.actions.includes("filewrite") && <Chip size="small" color="warning" variant="outlined" label="Writes without sh" />}
                           </>
                         )}
                       </Stack>

@@ -13,6 +13,10 @@ current between calls.
 Two ways to say which connection this is:
   * `--profile <id>`: no secret; the user allows the session in Pierside's UI;
   * PIERSIDE_MCP_TOKEN: a token-mode connection, for unattended use.
+
+`--structured` asks for structured results: each tool's outputSchema in the tool list and its data as
+`structuredContent` in its results. Off by default, because Claude Code then shows the model the
+structured data instead of the text, which reads worse.
 """
 
 import json
@@ -100,6 +104,8 @@ def main() -> None:
     else:
         # One id per run of this process = one session the user approves.
         auth = {"X-Pierside-Profile": profile, "X-Pierside-Session": secrets.token_hex(16)}
+    if "--structured" in sys.argv[1:]:
+        auth["X-Pierside-Structured"] = "1"  # on every request, the pings too: the tool list's fingerprint depends on it
     threading.Thread(target=_poll, args=(auth,), daemon=True).start()
     for line in sys.stdin.buffer:
         line = line.strip()

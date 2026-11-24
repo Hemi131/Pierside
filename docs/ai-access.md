@@ -76,9 +76,9 @@ These apply to the containers chosen under **Which containers**.
 | **Start, stop, restart** | Also pause, resume and kill; single containers and whole Compose projects |
 | **Create, rename, delete** | Run a new container from an image (name, ports, environment, volumes, restart policy, network); recreate a container with the same settings, for example to pick up a newer image; rename and delete containers |
 | **Compose up and down** | Read a project's Compose files and its resolved configuration, bring the project up (also after a change, or when it is down) and take it down. **SSH engines only**, see below. |
-| **Run commands** | Any shell command inside the containers, optionally as a given user and in a given folder, with a time limit of up to two minutes. A command that runs past its limit is reported as an error but is not stopped. |
+| **Run commands** | Any shell command inside the containers, optionally as a given user and in a given folder, with a time limit of up to two minutes. A command that runs past its limit, or prints far more than can be read (over 800,000 bytes), is stopped together with the processes it started, also those it sent into the background (for example `(tail -f log &)`). Only a program that detached itself completely with `setsid` keeps running. A command that ends normally leaves its background programs running, as `docker exec` does. |
 
-**Log limits.** A request returns the newest 200 lines unless the assistant asks for more, and never more than the connection's **Most log lines per request** (500 unless you change it, at most 5000). A text filter searches only that many newest lines of the requested time window, not the whole log. "Allow everything" connections use the maximum, 5000. Any single answer is also cut at 200,000 characters.
+**Log limits.** A request returns the newest 200 lines unless the assistant asks for more, and never more than the connection's **Most log lines per request** (500 unless you change it, at most 5000). A text filter searches only that many newest lines of the requested time window, not the whole log. "Allow everything" connections use the maximum, 5000. When the assistant asks for more lines than the connection allows, the answer says so. Every answer is kept to about 60,000 characters, so that an assistant such as Claude Code shows it directly (see below for how longer results continue).
 
 A new or renamed container must have a name the connection covers. New containers can't mount the Docker socket, system folders of the host such as `/etc`, `/usr` or `/var/lib/docker` (or a folder that contains one, such as `/var`), or the volumes of Pierside and other extensions. A host path with a symbolic link in it is refused too, and so is a path inside a folder that a container the assistant can reach mounts writable: otherwise the assistant could make a link there that leads to a system folder. Mounting a volume that already exists also needs **See volumes**. They can't use the host's network or share another container's (`container:…`). They can join any network the connection may see, including a macvlan or ipvlan network if the engine has one: that puts the container on your local network (not into the host's own).
 
@@ -96,7 +96,14 @@ List one path pattern per line. `*` matches within one folder, `**` also across 
 - `/etc/nginx/**` allows everything under `/etc/nginx`
 - `/app/config/*.yaml` allows the YAML files directly in `/app/config`
 
-Nothing is reachable until you add a path. A path that goes through a symbolic link is refused, so a link inside an allowed folder can't be used to reach something outside it. A search looks only into files the patterns allow, also below the folder it starts in; it stops after 30 seconds and never reads `/proc`, `/sys` or `/dev`.
+Nothing is reachable until you add a path. A path that goes through a symbolic link is refused, so a link inside an allowed folder can't be used to reach something outside it. In a running container this holds also when a process in it replaces a folder with a link just as the assistant reads, lists or searches it, as long as the container has `sh` and `cat` (without them Pierside reads through Docker, which doesn't notice such a swap). Swapping the file itself, rather than a folder, is caught only where the container also has `/proc` and `readlink`, and not during a search. Reading and listing run as root in the container (a search runs as the container's own user); in a container that takes away root's access to other users' files (for example `--cap-drop ALL`), they run again as the container's own user, so its own files can still be read and listed. A search looks only into files the patterns allow, also below the folder it starts in; it stops after 30 seconds and never reads `/proc`, `/sys` or `/dev`.
+
+Changing files in a running container is protected the same way: writing, creating a folder, deleting and changing permissions act only in the folder that was checked, also when a process in the container replaces it (or a folder inside it, while a whole folder is deleted or changed) with a link at that moment. What changed that way is left as it is and named in the answer. This needs `sh`, and for writing also `head`, in the container.
+
+- An existing file is written in place, so it keeps its owner, permissions and hard links. New files and folders belong to the container's own user. Writing runs as that user first and as root where the user isn't allowed to.
+- Deleting and changing permissions run as the container's own user, as before. A recursive permission change leaves symbolic links and special files (FIFOs, sockets, devices) as they are, and a file it can't open is left as it is too.
+- A stopped container is written through Docker. Nothing in it can swap a folder then.
+- A running container without `sh` (a distroless image, for example) can't be written to unless you tick **Also write to running containers that have no shell** under **Change files**. Pierside then writes through Docker, which doesn't notice a swapped folder. This switch is off by default, also with **Allow everything**.
 
 ### The whole engine
 
@@ -110,7 +117,7 @@ These are not limited to the shared containers.
 | **See networks** | List networks and what is attached |
 | **Connect networks** | Connect a shared container to a network, or disconnect it |
 | **See ports** | Published and exposed ports of the shared containers, and Pierside's port forwards |
-| **Forward ports** | Make a shared container's port reachable at `localhost` on your computer, and remove such forwards |
+| **Forward ports** | Make a shared container's port reachable at `localhost` on your computer, and remove such forwards. A forward follows a renamed container and ends when its container is deleted (on an SSH engine within a minute); until then the assistant sees it marked and can remove it |
 | **Engine info** | Docker version, CPUs and memory, disk usage, and recent engine events such as crashes and out-of-memory kills |
 | **See Swarm** | Nodes, stacks, services and their tasks, service logs, and the names (never the contents) of secrets and configs |
 | **Change Swarm services** | Create, scale, restart, change the image, roll back and remove services; remove a stack. Deploying a stack from a Compose file is not available. |
@@ -129,12 +136,12 @@ Compose up, down and reading Compose files work on SSH engines, where Pierside r
 
 When the assistant needs something its connection doesn't allow, it can ask you instead of stopping. Pierside shows what it asks for (a permission, a container or Compose project, a file path, an engine, or the values of environment variables) with the assistant's reason, and you answer:
 
-- **Allow this session**: that assistant session has it until it ends; the connection itself doesn't change.
+- **Allow this session**: that assistant session has it until it ends, or until you edit the connection (Pierside then tells you how many sessions lost such access, and the assistant can ask again); the connection itself doesn't change.
 - **Add to connection**: it becomes part of the connection, as if you had ticked it in the dialog.
 - **Deny**: refused; the assistant may ask for something else.
 - **Deny, pause 2 min**: refused, and that assistant session can't ask for more access for two minutes.
 
-Decide by the list of what would be allowed. The reason is written by the assistant, and text in a log or a file can talk an assistant into asking. The request waits in Pierside for ten minutes.
+Decide by the list of what would be allowed. The reason is written by the assistant, and text in a log or a file can talk an assistant into asking. The request waits in Pierside for ten minutes. A new request's allow buttons react only after a moment, so a click meant for the previous question doesn't answer it, and after you answer, a message says what you decided. Pierside's own, extension and Kubernetes containers never match a request, even an allowed one.
 
 The assistant can't ask for **Allow everything**, for mounting host system folders, or to change how it is trusted or when it is asked; those you set yourself. Asking is available for connections you allow in Pierside, not for access tokens, and you can switch it off per connection with **The assistant may ask for more access**.
 
@@ -155,7 +162,7 @@ Not even with "Allow everything":
 
 - **Logs and files can contain secrets.** Passwords printed at start-up, tokens in config files and the values of environment variables go to the assistant, and so to the AI provider, if you allow them. Share narrowly.
 - **Image details can contain secrets too.** With environment values hidden, the build history still shows `RUN` lines as they were written; a secret typed directly into a Dockerfile command is visible there.
-- **Run commands removes the other limits** for the containers it covers: a command can read any file and change anything inside them. Leave it off unless you need it.
+- **Run commands removes the other limits** for the containers it covers: a command can read any file, including those outside the allowed paths, read the values of environment variables even when they are hidden, and change anything inside them. Pierside asks about it with that warning. Leave it off unless you need it.
 - **The engine-wide permissions show more than the shared containers.** **See images** and **See networks** list everything of that kind on the engine. **See volumes** lists the volumes that are unused or used only by shared containers (all volumes when the connection shares all containers): a volume holds the data of the containers using it. Lists of a network's or volume's containers name only shared ones. **Engine info** gives totals for the whole engine, but names only what the connection can see anyway: its own containers in engine events and in the largest items of disk usage, and images, volumes and networks only with the permission for them.
 - **Container output is untrusted text.** A container can print something that reads like instructions. Read-only connections limit what such text could cause.
 - A connection that uses an access token keeps that token in the assistant's configuration in plain text. Prefer the approval mode unless the assistant must run unattended.
@@ -178,3 +185,8 @@ Changes apply to the next call; the assistant doesn't need to reconnect, except 
 - The assistant reaches Pierside through `docker exec`, so it needs the `docker` command on your computer, and Rancher Desktop and Pierside must be running.
 - The connection keeps working when Pierside is updated. It stops if you install Pierside from a different image name (for example a build of your own), because the container name in the command changes; copy the command again with the key button.
 - Connections are stored in Pierside's data volume and survive updates.
+- Each answer is kept to a size an assistant can read. When a result is longer (many log lines, a big folder, long command output), Pierside leaves out whole lines or entries and says what it left out and how to get the rest: for example the next page of a folder listing, or the next lines of a file. A single line that is longer than a whole answer (a minified file, for example) is shortened, and the result says so. Some outputs are kept to their end by design: the latest output of each health check (800 characters) and Compose's output after up or down (about 6,000 characters).
+
+## Structured results
+
+Every tool also returns its result as structured data (MCP `structuredContent`, described by each tool's output schema), for clients and programs that work with data rather than text. Add `--structured` at the end of the connection command to get it. It is off by default, because some clients, Claude Code among them, then show the assistant the data instead of the text, which is longer and reads worse.

@@ -100,7 +100,23 @@ async def _approved(profile: Profile, session: str, name: str, args: dict, targe
     return None
 
 
-async def _call_tool(profile: Profile, session: str, params: dict) -> dict:
+STRUCTURED_MAX_CHARS = 2 * mcp_tools.MAX_OUTPUT_CHARS  # tools bound their data well below this (mcp_tools._within)
+
+
+def _not_allowed(profile: Profile, session: str) -> str:
+    """Why a tool's permission is missing. After an edit of the connection took back what was allowed
+    for this session only, say so: the tool may have worked a moment ago."""
+    ask = " ask again with request_access if the task still needs it" if profile.can_ask() else " they can allow it in Pierside under AI access"
+    if session and approvals.withdrawn(session):
+        return "the user changed the connection, which withdrew what they had allowed for this session only;" + ask + "."
+    return "the user hasn't allowed this for the connection." + (" Ask for it with request_access if the task needs it." if profile.can_ask() else " They can change that in Pierside under AI access.")
+
+
+async def _call_tool(profile: Profile, session: str, params: dict, structured: bool = False) -> dict:
+    """One tools/call. With `structured`, a successful result also carries the tool's data as
+    `structuredContent` (opt-in, header X-Pierside-Structured: Claude Code shows the model
+    structuredContent instead of the text when both are there, and the text reads better). Errors are
+    text only: a client checks structuredContent against the tool's outputSchema, which describes success."""
     name, args = params.get("name"), params.get("arguments") or {}
     entry = mcp_tools.TOOLS.get(name) if isinstance(name, str) else None
     target = str(args.get("container") or "") if isinstance(args, dict) else ""
@@ -121,13 +137,13 @@ async def _call_tool(profile: Profile, session: str, params: dict) -> dict:
     row = begin(profile, name, target)  # shown in the activity list from now, as running
     try:
         if entry.action is not None and not profile.allows(entry.action):
-            raise mcp_tools.Denied("the user hasn't allowed this for the connection. They can change that in Pierside under AI access.")
+            raise mcp_tools.Denied(_not_allowed(profile, session))
         engine_id = _engine(profile, args.pop("engine", None) if name not in mcp_tools.NO_ENGINE else None)
         # Reject what the tool doesn't know, rather than ignore it: a misspelt `timeout` must not
         # quietly run a command with the default limit.
         unknown = sorted(set(args) - set(entry.schema["properties"]))
         if unknown:
-            accepted = ", ".join(sorted(entry.schema["properties"]) + ["engine"])
+            accepted = ", ".join(sorted(entry.schema["properties"]) + ([] if name in mcp_tools.NO_ENGINE else ["engine"]))
             raise mcp_tools.ToolError(f"Unknown argument{'s' if len(unknown) > 1 else ''} {', '.join(unknown)}. {name} accepts: {accepted}")
         if len(profile.engine_ids()) > 1 and name not in mcp_tools.NO_ENGINE:
             target = row["target"] = f"[{mcp_tools.engine_name(engine_id)}] {target}".strip()
@@ -139,9 +155,29 @@ async def _call_tool(profile: Profile, session: str, params: dict) -> dict:
         docker = await clients.get(engine_id)
         if name == "request_access":
             waiting(row, True)  # the whole call is a question to the user
-        text = await entry.fn(mcp_tools.Ctx(profile, engine_id, docker, session), args)
+        out = await entry.fn(mcp_tools.Ctx(profile, engine_id, docker, session), args)
+        # From here the tool has done its work: nothing below may report it as failed.
         record(row, "ok")
-        return result(text, False)
+        try:
+            text = mcp_tools.render(out)
+        except Exception as e:  # a bug in the tool's result, after it did its work: never "failed"
+            log.exception("MCP tool %s: its result can't be shown", name)
+            text = f"The call was carried out, but Pierside couldn't show its result ({type(e).__name__}); the user can find details in the backend log."
+        answer = result(text, False)
+        if structured:
+            # Plain JSON within the limit (no default=, never cut): anything else is a bug in the tool.
+            try:
+                size = len(json.dumps(out.data, allow_nan=False, ensure_ascii=False))  # as the HTTP answer encodes it
+                problem = f"{size} characters, over {STRUCTURED_MAX_CHARS}" if size > STRUCTURED_MAX_CHARS else ""
+            except (TypeError, ValueError) as e:
+                problem = f"not plain JSON: {e}"
+            if problem:
+                log.warning("MCP tool %s: its data can't be sent (%s)", name, problem)
+                # The tool's outputSchema promises data with every success, so this answer is marked an
+                # error, but it says plainly that the call was carried out, so it isn't made again.
+                return result(f"The call was carried out, but Pierside couldn't give its result as structured data ({problem}); this is the result as text:\n{text}", True)
+            answer["structuredContent"] = out.data
+        return answer
     except (mcp_tools.Denied, UnsafePath) as e:
         record(row, "denied", str(e))
         return result(f"Not allowed: {e}", True)
@@ -165,7 +201,7 @@ async def _call_tool(profile: Profile, session: str, params: dict) -> dict:
             record(row, "error", "The assistant stopped waiting for the answer")
 
 
-async def _handle(profile: Profile, session: str, msg) -> dict | None:
+async def _handle(profile: Profile, session: str, msg, structured: bool = False) -> dict | None:
     if not isinstance(msg, dict) or msg.get("jsonrpc") != "2.0" or not isinstance(msg.get("method"), str):
         return _error(msg.get("id") if isinstance(msg, dict) else None, -32600, "Invalid request")
     method, mid, params = msg["method"], msg.get("id"), msg.get("params") or {}
@@ -182,11 +218,11 @@ async def _handle(profile: Profile, session: str, msg) -> dict | None:
     elif method == "ping":
         result = {}
     elif method == "tools/list":
-        result = {"tools": mcp_tools.tool_definitions(profile)}
+        result = {"tools": mcp_tools.tool_definitions(profile, structured)}
     elif method == "tools/call":
         if not isinstance(params, dict):
             return _error(mid, -32602, "Invalid params")
-        result = await _call_tool(profile, session, params)
+        result = await _call_tool(profile, session, params, structured)
     else:
         return _error(mid, -32601, f"Method not found: {method}")
     return {"jsonrpc": "2.0", "id": mid, "result": result}
@@ -212,20 +248,22 @@ async def mcp_endpoint(request: Request):
     except ValueError:
         return JSONResponse(_error(None, -32700, "Parse error"), status_code=400)
     profiles.touch(profile)
+    structured = request.headers.get("x-pierside-structured") == "1"  # the stdio bridge's --structured
     # What applies to this session: the connection plus what the user allowed this session on top.
     # Looked up again for every message and for the stamp, as a call (request_access) can change it.
     if isinstance(body, list):
-        answers = [a for a in [await _handle(approvals.effective(profile, session), session, m) for m in body] if a is not None]
-        return _stamped(approvals.effective(profile, session), JSONResponse(answers) if answers else Response(status_code=202))
-    answer = await _handle(approvals.effective(profile, session), session, body)
-    return _stamped(approvals.effective(profile, session), JSONResponse(answer) if answer is not None else Response(status_code=202))
+        answers = [a for a in [await _handle(approvals.effective(profile, session), session, m, structured) for m in body] if a is not None]
+        return _stamped(approvals.effective(profile, session), JSONResponse(answers) if answers else Response(status_code=202), structured)
+    answer = await _handle(approvals.effective(profile, session), session, body, structured)
+    return _stamped(approvals.effective(profile, session), JSONResponse(answer) if answer is not None else Response(status_code=202), structured)
 
 
-def _stamped(profile: Profile, response: Response) -> Response:
+def _stamped(profile: Profile, response: Response, structured: bool = False) -> Response:
     """Every answer says which tool list applies right now. The stdio bridge compares it with the one
     the client last saw and announces `notifications/tools/list_changed` when it differs (this
     endpoint can't send messages of its own)."""
-    listing = json.dumps(mcp_tools.tool_definitions(profile), sort_keys=True).encode()
+    # The same list tools/list gives this client: with output schemas only when it asked for structured results.
+    listing = json.dumps(mcp_tools.tool_definitions(profile, structured), sort_keys=True).encode()
     response.headers["X-Pierside-Tools"] = hashlib.sha256(listing).hexdigest()[:16]
     return response
 
@@ -249,6 +287,7 @@ class ProfileBody(BaseModel):
     god: bool | None = None
     mayAsk: bool | None = None
     hostMounts: bool | None = None
+    uncheckedWrites: bool | None = None
     allContainers: bool | None = None
     projects: list[str] | None = None
     containers: list[str] | None = None
@@ -350,10 +389,13 @@ async def update_profile(pid: str, body: ProfileBody):
     try:
         p, token = profiles.update(pid, _check(body))
         if not p.enabled or body.trust == "none":
+            withdrawn = approvals.forget_grants(pid)  # counted before forget_profile drops them with the sessions
             approvals.forget_profile(pid)  # switched off or trust withdrawn: running sessions must ask again
         else:
-            approvals.forget_grants(pid)  # "allow this session" extras mustn't outlive a narrowed connection
-        return {"profile": p.public(), "token": token}
+            # "Allow this session" extras mustn't outlive a narrowed connection; the UI tells the user,
+            # connection_info the assistant.
+            withdrawn = approvals.forget_grants(pid)
+        return {"profile": p.public(), "token": token, "withdrawnSessionGrants": withdrawn}
     except KeyError:
         raise HTTPException(404, "Unknown connection")
     except ValueError as e:

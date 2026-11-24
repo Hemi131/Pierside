@@ -15,7 +15,8 @@ proxy (app/fwdproxy.py, from Pierside's own image):
 
 Definitions are kept in /data/forwards.json. Helpers exist only while the backend runs: removed on
 shutdown (e.g. uninstall) and re-created on startup; stale ones from a crash are cleaned up first.
-A forward whose target container is removed goes away with it.
+A forward whose target container is removed goes away with it (a remote one within a minute, or at its
+next connection); a renamed target keeps its forward, under the new name.
 """
 
 import asyncio
@@ -41,6 +42,7 @@ HELPER_LABEL = "com.pierside.helper"  # hides helpers in the containers list; va
 PROXY_PORT = 7000  # inside each helper
 RELAY_PORTS = range(9100, 9200)  # inside this backend, for remote forwards (not published)
 CHECK_EVERY_S = 10
+REMOTE_CHECK_ROUNDS = 6  # remote forwards' containers are checked every 6th round (a minute), over SSH
 
 
 class ForwardError(Exception):
@@ -193,6 +195,7 @@ class Forwards:
             info = await self.docker._query_json(f"containers/{f['target']['id']}/json")
         except aiodocker.DockerError as e:
             raise ForwardError("The container no longer exists") from e
+        self._renamed(f, info)
         mode = (info.get("HostConfig") or {}).get("NetworkMode") or ""
         if mode in ("host", "none") or mode.startswith("container:"):
             raise ForwardError(f"The container uses network mode '{mode}'; its ports can't be forwarded")
@@ -282,6 +285,15 @@ class Forwards:
                 continue
         raise ForwardError("No free relay port")
 
+    def _renamed(self, f: dict, info: dict) -> None:
+        """Keep the target's name current (the AI tools match forwards to containers; a renamed target
+        would otherwise look like someone else's)."""
+        name = (info.get("Name") or "").lstrip("/")
+        if name and name != f["target"]["name"]:
+            f["target"]["name"] = name
+            if f["id"] in self.items:
+                self._save()
+
     async def _remote_target(self, conn, f: dict) -> tuple[str, int] | None:
         """(host, port) to dial on the server for a remote forward, looked up now; None if the container is gone.
         By id, else by name (Compose keeps the name when it recreates a container)."""
@@ -301,15 +313,39 @@ class Forwards:
         if info["Id"] != f["target"]["id"]:
             f["target"]["id"] = info["Id"]
             self._save()
+        self._renamed(f, info)
         host, port = remote_endpoint(info, f["targetPort"])
         f["remote"]["host"], f["remote"]["port"] = host, port
         return host, port
 
     # ---- keeping container forwards current ------------------------------------------------------
+    async def _check_remote(self, fid: str, f: dict) -> None:
+        """A remote forward whose container is gone from its server goes away with it (as on a
+        connection, in `handle`); a server that can't be reached only sets the problem."""
+        async def look() -> tuple[str, int] | None:
+            return await self._remote_target(await self._ssh_conn(f["remote"]["engineId"]), f)
+
+        try:
+            target = await asyncio.wait_for(look(), 30)
+        except Exception as e:
+            self.status[fid] = f"Can't check the container on the server: {e or type(e).__name__}"
+            return
+        if (self.status.get(fid) or "").startswith("Can't check"):
+            self.status[fid] = ""
+        if target is None:
+            log.info("container of forward %s removed on the server: removing the forward", fid)
+            await self.remove(fid)
+
     async def _watch(self) -> None:
+        rounds = 0
         while True:
             await asyncio.sleep(CHECK_EVERY_S)
+            rounds += 1
             for fid, f in list(self.items.items()):
+                if f["kind"] == "remote":
+                    if rounds % REMOTE_CHECK_ROUNDS == 0:  # over SSH: less often
+                        await self._check_remote(fid, f)
+                    continue
                 if f["kind"] != "container":
                     continue
                 try:

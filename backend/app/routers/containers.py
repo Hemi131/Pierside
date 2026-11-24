@@ -35,8 +35,11 @@ async def run_command(cid: str):
 
 async def _running_with_shell(cid: str) -> None:
     info = await query_json(f"containers/{cid}/json")
-    if not (info.get("State") or {}).get("Running"):
+    state = info.get("State") or {}
+    if not state.get("Running"):
         raise HTTPException(409, "The container isn't running. Start it to browse its files.")
+    if state.get("Paused"):
+        raise HTTPException(409, "The container is paused. Resume it to work with its files.")
 
 
 def _fs_http(e: fsbrowse.FsError) -> HTTPException:
@@ -52,7 +55,7 @@ async def _fs_call(cid: str, coro_fn):
     except aiodocker.DockerError as e:
         msg = (e.message.get("message") if isinstance(e.message, dict) else str(e.message)) or ""
         if "executable file not found" in msg or "no such file" in msg.lower():
-            raise HTTPException(501, "This container has no shell tools (sh/find/stat), so its files can't be browsed.")
+            raise HTTPException(501, fsbrowse.NO_SHELL)
         raise
 
 
@@ -89,10 +92,7 @@ async def container_upload(cid: str, request: Request, path: str, name: str):
     size = request.headers.get("content-length")
     if not size or not size.isdigit():
         raise HTTPException(411, "Content-Length is required")
-    try:
-        target = await fswrite.upload(cid, path, name, int(size), request.stream())
-    except fsbrowse.FsError as e:
-        raise _fs_http(e)
+    target = await _fs_call(cid, lambda: fswrite.upload(cid, path, name, int(size), request.stream()))
     return {"path": target}
 
 
@@ -103,10 +103,7 @@ class SaveFile(BaseModel):
 
 @router.put("/{cid}/file")
 async def container_save_file(cid: str, body: SaveFile):
-    try:
-        return await fswrite.save_text(cid, body.path, body.content)
-    except fsbrowse.FsError as e:
-        raise _fs_http(e)
+    return await _fs_call(cid, lambda: fswrite.save_text(cid, body.path, body.content))
 
 
 class MakeDir(BaseModel):
@@ -115,10 +112,7 @@ class MakeDir(BaseModel):
 
 @router.post("/{cid}/mkdir")
 async def container_mkdir(cid: str, body: MakeDir):
-    try:
-        return await fswrite.make_dir(cid, body.path)
-    except fsbrowse.FsError as e:
-        raise _fs_http(e)
+    return await _fs_call(cid, lambda: fswrite.make_dir(cid, body.path))
 
 
 @router.post("/{cid}/delete")

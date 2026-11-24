@@ -43,6 +43,21 @@ async def docker_run_command(cid: str, query=query_json, redact: bool = False) -
     net = host.get("NetworkMode")
     if net and net not in ("default", "bridge"):
         parts.append(f"--network {_q(net)}")
+    # `docker run` takes one network: its aliases go with --network-alias, the other networks the
+    # container is on become `docker network connect` lines after the command.
+    networks = (c.get("NetworkSettings") or {}).get("Networks") or {}
+    special = net in ("host", "none") or (net or "").startswith("container:")
+    primary = "bridge" if net in (None, "", "default") else net
+    own = {name, (c.get("Id") or "")[:12]}  # aliases Docker adds by itself
+
+    def aliases(network: str) -> list[str]:
+        if network == "bridge":
+            return []  # the default bridge has no aliases
+        return [a for a in (networks.get(network) or {}).get("Aliases") or [] if a and a not in own]
+
+    if not special:
+        parts += [f"--network-alias {_q(a)}" for a in aliases(primary)]
+    connect = [] if special else [n for n in networks if n != primary]
 
     for cport, bindings in sorted((host.get("PortBindings") or {}).items()):
         port, _, proto = cport.partition("/")
@@ -99,4 +114,8 @@ async def docker_run_command(cid: str, query=query_json, redact: bool = False) -
     if args:
         parts.append(" ".join(_q(x) for x in args))
 
-    return " \\\n  ".join(parts)
+    command = " \\\n  ".join(parts)
+    for network in connect:
+        flags = "".join(f" --alias {_q(a)}" for a in aliases(network))
+        command += f"\ndocker network connect{flags} {_q(network)} {_q(name or c.get('Id') or '')}"
+    return command

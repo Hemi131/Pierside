@@ -89,6 +89,9 @@ class Profile:
     mayAsk: bool = True  # approval mode: the assistant may ask the user for more access (request_access)
     god: bool = False  # everything allowed, on the profile's engines
     hostMounts: bool = False  # with god only: new containers may mount the Docker socket and host system folders
+    # write_file / make_folder in a running container without `sh`: through Docker's archive API, which
+    # doesn't notice a folder swapped for a link (the checked scripts need sh). Never granted by asking.
+    uncheckedWrites: bool = False
     allEngines: bool = False
     engines: list[str] = field(default_factory=lambda: [LOCAL_ID])  # the first is the default
     allContainers: bool = False
@@ -155,6 +158,9 @@ class Profile:
 
     def host_mounts(self) -> bool:
         return self.god and self.hostMounts
+
+    def unchecked_writes(self) -> bool:
+        return self.uncheckedWrites  # not implied by god: the user switches it on by itself
 
     def all_containers(self) -> bool:
         return self.god or self.allContainers
@@ -276,6 +282,8 @@ class ProfileStore:
             p.god = bool(data["god"])
         if "hostMounts" in data:
             p.hostMounts = bool(data["hostMounts"])
+        if "uncheckedWrites" in data:
+            p.uncheckedWrites = bool(data["uncheckedWrites"])
         if "allContainers" in data:
             p.allContainers = bool(data["allContainers"])
         if "projects" in data:
@@ -443,6 +451,7 @@ class Approvals:
         # A grant is {"actions", "containers", "projects", "filePaths", "engines": lists, "showEnv": bool}.
         self._grants: dict[str, tuple[str, dict]] = {}
         self._refused: dict[str, float] = {}  # session id -> when the user last refused more access
+        self._withdrawn: set[str] = set()  # sessions whose session-only grants an edit of the connection dropped
 
     def grant(self, profile: Profile, session: str) -> dict:
         entry = self._grants.get(session)
@@ -462,9 +471,20 @@ class Approvals:
         entry = self._sessions.get(session)
         return bool(entry) and entry[0] == profile.id
 
-    def forget_grants(self, pid: str) -> None:
-        """Drop what sessions of this profile were granted for the session only (the profile changed)."""
+    def forget_grants(self, pid: str) -> int:
+        """Drop what sessions of this profile were granted for the session only (the profile changed).
+        Returns how many sessions lost something; those are remembered so connection_info can tell the
+        assistant (`withdrawn`) until it is granted something again."""
+        dropped = [s for s, v in self._grants.items() if v[0] == pid and any(v[1].values())]
         self._grants = {s: v for s, v in self._grants.items() if v[0] != pid}
+        if len(self._withdrawn) > 500:
+            self._withdrawn.clear()
+        self._withdrawn.update(dropped)
+        return len(dropped)
+
+    def withdrawn(self, session: str) -> bool:
+        """Whether this session's grants were dropped when its connection was edited (and nothing granted since)."""
+        return session in self._withdrawn
 
     def forget_profile(self, pid: str) -> None:
         self._sessions = {s: v for s, v in self._sessions.items() if v[0] != pid}
@@ -517,6 +537,7 @@ class Approvals:
                 if profile is None:
                     raise KeyError(rid)
                 self._grants[req["session"]] = (profile.id, merge_grants(self.grant(profile, req["session"]), req["grant"]))
+                self._withdrawn.discard(req["session"])
         if req["kind"] == "session" and decision != "deny":
             if len(self._sessions) > 500:  # sessions are never reported closed; keep the newest
                 for old in sorted(self._sessions, key=lambda x: self._sessions[x][1])[:250]:

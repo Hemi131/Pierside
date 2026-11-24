@@ -15,6 +15,21 @@ import type { AccessRequest, Trust } from "./AccessView";
 // The backend announces new questions over the live channel; this slow check only covers a window
 // whose live channel is down.
 const POLL_MS = 20000;
+/** How long a new question's allowing buttons stay disabled. */
+const ARM_MS = 700;
+
+/** What the user decided, for the toast after answering (so a wrong click is noticed at once). */
+const DECIDED: Record<string, string> = {
+  deny: "Denied",
+  deny_pause: "Denied; further requests paused for 2 minutes",
+  session: "Allowed for this session",
+  permanent: "Added to the connection",
+  once: "Assistant allowed for this session",
+  day: "Assistant trusted for 24 hours",
+  week: "Assistant trusted for 7 days",
+  month: "Assistant trusted for 30 days",
+  always: "Assistant trusted always",
+};
 
 /** One question. A session's questions share an id (there is one at a time), so the id alone would
  * also hide the next question from a session whose earlier one was answered here. */
@@ -56,6 +71,18 @@ export function AccessPrompt() {
   }, [onEvent, load]);
 
   const req = requests[0];
+
+  // A new question can open right where the last one was answered: its allowing buttons wait a moment,
+  // so a click (or double click) meant for the previous question can't answer this one. Deny is never held.
+  const key = req ? questionKey(req) : "";
+  const [armed, setArmed] = useState("");
+  useEffect(() => {
+    if (!key) return;
+    const timer = window.setTimeout(() => setArmed(key), ARM_MS);
+    return () => window.clearTimeout(timer);
+  }, [key]);
+  const held = armed !== key;
+
   if (!req) return null;
 
   const answer = async (decision: "deny" | "deny_pause" | "allow" | "once" | "session" | "permanent" | Exclude<Trust, "none">) => {
@@ -66,6 +93,12 @@ export function AccessPrompt() {
       // createdAt names the question shown here: if the assistant replaced it meanwhile, the backend
       // decides nothing (409) and the new question is shown instead.
       await api.post(`/mcp-access/requests/${encodeURIComponent(req.id)}`, { decision, createdAt: req.createdAt });
+      // Not after each call's confirmation (those can come one after another); the grants are the ones
+      // that last, so a wrong click there is told at once.
+      if (req.kind !== "call") {
+        const what = req.kind === "access" && req.items?.length ? `: ${req.items.join("; ")}` : ` (${req.profile})`;
+        toast(decision.startsWith("deny") ? "info" : "success", `${DECIDED[decision] ?? decision}${what}`);
+      }
     } catch (e) {
       stale = e instanceof ApiError && e.status === 409;
       toast(stale ? "warning" : "info", (e as Error).message);
@@ -94,6 +127,11 @@ export function AccessPrompt() {
                 </Typography>
               ))}
             </Box>
+            {(req.items ?? []).some((item) => item.startsWith("Container:") || item.startsWith("Compose project:")) && (
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                Pierside&apos;s own, extension and Kubernetes containers never match, even when allowed.
+              </Typography>
+            )}
             <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5 }}>
               Its reason, in its own words:
             </Typography>
@@ -141,7 +179,7 @@ export function AccessPrompt() {
         )}
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2 }}>
-        <Button variant="outlined" color="error" disabled={busy} onClick={() => void answer("deny")}>
+        <Button variant="outlined" color="error" disabled={busy} onClick={() => void answer("deny")} autoFocus>
           Deny
         </Button>
         {access && (
@@ -154,20 +192,20 @@ export function AccessPrompt() {
         <Box sx={{ flex: 1 }} />
         {access ? (
           <>
-            <Button variant="outlined" disabled={busy} onClick={() => void answer("permanent")}>
+            <Button variant="outlined" disabled={busy || held} onClick={() => void answer("permanent")}>
               Add to connection
             </Button>
-            <Button variant="contained" disabled={busy} onClick={() => void answer("session")}>
+            <Button variant="contained" disabled={busy || held} onClick={() => void answer("session")}>
               Allow this session
             </Button>
           </>
         ) : call ? (
-          <Button variant="contained" disabled={busy} onClick={() => void answer("allow")}>
+          <Button variant="contained" disabled={busy || held} onClick={() => void answer("allow")}>
             Allow
           </Button>
         ) : (
           <>
-            <Button variant="outlined" disabled={busy} endIcon={<ArrowDropDownIcon />} onClick={(e) => setLonger(e.currentTarget)}>
+            <Button variant="outlined" disabled={busy || held} endIcon={<ArrowDropDownIcon />} onClick={(e) => setLonger(e.currentTarget)}>
               Allow longer
             </Button>
             <Menu anchorEl={longer} open={!!longer} onClose={() => setLonger(null)}>
@@ -176,7 +214,7 @@ export function AccessPrompt() {
               <MenuItem onClick={() => void answer("month")}>For 30 days</MenuItem>
               <MenuItem onClick={() => void answer("always")}>Always (never ask again)</MenuItem>
             </Menu>
-            <Button variant="contained" disabled={busy} onClick={() => void answer("once")}>
+            <Button variant="contained" disabled={busy || held} onClick={() => void answer("once")}>
               Allow this session
             </Button>
           </>

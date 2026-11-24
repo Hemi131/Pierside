@@ -24,6 +24,7 @@ from collections.abc import AsyncIterator
 from contextvars import ContextVar
 
 import aiodocker
+import asyncssh
 
 from app.services import fsbrowse, fswrite
 from app.services.docker_client import get_docker, query_json
@@ -166,7 +167,7 @@ def _ssh_failed(path: str, code: int, err: bytes, what: str) -> FsError:
     text = err.decode("utf-8", "replace").strip()
     if code == fsbrowse.DENIED or "Permission denied" in text or "Operation not permitted" in text:
         return fsbrowse.denied(path)
-    return FsError(text or f"{what} failed ({code})", 404 if "No such file" in text else 409)
+    return FsError(fsbrowse._brief(text) or f"{what} failed ({code})", 404 if "No such file" in text else 409)
 
 
 # ---- through Docker -----------------------------------------------------------------------------------
@@ -259,9 +260,11 @@ async def _helper(folder: str, writable: bool) -> tuple[str, str]:
         # The rest of the path is followed inside the helper: a link there that leads out of the mount
         # would show the helper's own files as if they were the server's.
         inner = MOUNT + _inside(mounted, folder) if _inside(mounted, folder) != "/" else MOUNT
-        code, out, _err = await fsbrowse._exec(cid, ["readlink", "-f", "--", inner])
+        # Decided by the output whatever the exit code says (Docker may record it late): any answer
+        # outside the mount refuses; no answer means nothing to follow (the next step reports it missing).
+        _code, out, _err = await fsbrowse._exec(cid, ["readlink", "-f", "--", inner])
         real = out.decode("utf-8", "replace").rstrip("\n")
-        if code == 0 and real and not (real == MOUNT or real.startswith(MOUNT + "/")):
+        if real and not (real == MOUNT or real.startswith(MOUNT + "/")):
             raise FsError(f"{folder} is a link that leads outside the folder Pierside could mount, so it can't be followed here", 403)
     return cid, mounted
 
@@ -364,17 +367,27 @@ async def read_preview(path: str) -> dict:
     return {**await fsbrowse.read_preview(cid, MOUNT, _inside(mounted, path)), "path": path, "via": "docker"}
 
 
+# Saving over SSH, as the SSH user: the "$2" bytes of the input go to a private temporary file first
+# (mktemp: the folder itself need not be writable to edit a file in it), so a connection lost while they
+# arrive leaves file "$1" as it was. Then they are copied into it locally: an existing file in place
+# (keeps owner, mode, hard links; through a link to it, as before), a new one created (`set -C`: never
+# one that appeared meanwhile). Prints 1 for created, 0 for changed. Exit 3: not permitted.
+_SSH_SAVE = (
+    'F="$1"; T=$(mktemp) || exit 1; trap \'rm -f -- "$T"\' EXIT; trap \'exit 1\' HUP INT TERM; '
+    'head -c "$2" > "$T" || exit 1; '
+    'if [ "$(wc -c < "$T")" -ne "$2" ]; then echo "The file didn\'t arrive whole" >&2; exit 1; fi; '
+    'if [ -e "$F" ]; then [ -f "$F" ] || { echo "not a regular file" >&2; exit 2; }; [ -w "$F" ] || exit 3; '
+    'cat -- "$T" > "$F" || exit 1; echo 0; '
+    'else [ -w "$(dirname "$F")" ] || exit 3; ( set -C; cat -- "$T" > "$F" ) || exit 1; echo 1; fi'
+)
+
+
 async def save_text(path: str, content: str) -> dict:
     path = _norm(path)
     raw = content.encode("utf-8")
     if len(raw) > fswrite.MAX_EDIT:
         raise FsError("Edited files are limited to 1 MB", 413)
-    # Writing in place (not to a new file renamed over it) keeps the file's owner and permissions.
-    script = (
-        'F="$1"; if [ -e "$F" ]; then [ -f "$F" ] || { echo "not a regular file" >&2; exit 2; }; [ -w "$F" ] || exit 3; C=0; '
-        'else [ -w "$(dirname "$F")" ] || exit 3; C=1; fi; cat > "$F" && echo "$C"'
-    )
-    code, out, err = await ssh_run(["sh", "-c", script, "sh", path], raw)
+    code, out, err = await ssh_run(["sh", "-c", _SSH_SAVE, "sh", path, str(len(raw))], raw)
     if code == 0:
         return {"path": path, "size": len(raw), "created": out.strip() == b"1", "via": "ssh"}
     failure = _ssh_failed(path, code, err, "Saving")
@@ -437,6 +450,30 @@ async def chmod(path: str, mode: str, recursive: bool) -> dict:
     return {"path": path, "mode": mode, "via": "docker"}
 
 
+# Uploading over SSH, as the SSH user, in folder "$1": the "$3" bytes of the input go to part "$2" next to
+# the target "$4" (never an existing file: `set -C`), so an upload that breaks off leaves the target as it
+# was; the part is removed whenever it isn't put in place, also when the connection is lost (HUP).
+# A new target: the part moved into place (owner and mode as `cat >` gave them: the SSH user, its umask).
+# An existing regular file: the part gets its owner and mode and replaces it (`mv`: the old file's ACLs,
+# extended attributes and hard links don't carry over, and there must be room for both while it runs);
+# when the owner can't be given (it is someone else's, and the SSH user isn't root), or the target is a
+# link, the part is copied into the existing file in place instead, as a writable file was written
+# before (keeps owner, mode, hard links and the link). That copy runs on the server, so a lost
+# connection can't cut it short. Exit 3: not permitted.
+_SSH_RECEIVE = (
+    'cd -- "$1" || exit 1; trap \'rm -f -- "$2"\' EXIT; trap \'exit 1\' HUP INT TERM; '
+    '( set -C; head -c "$3" > "$2" ) || exit 1; '
+    'if [ "$(wc -c < "$2")" -ne "$3" ]; then echo "The upload didn\'t arrive whole" >&2; exit 1; fi; '
+    'if [ -L "$4" ]; then :; '
+    'elif [ -d "$4" ]; then echo "$4 is a folder" >&2; exit 1; '
+    'elif [ ! -e "$4" ]; then mv -f -- "$2" "$4" || exit 1; exit 0; '
+    'elif [ ! -f "$4" ]; then echo "$4 is not a regular file" >&2; exit 1; '
+    'else O=$(stat -c %u:%g -- "$4") && M=$(stat -c %a -- "$4") || exit 1; '
+    'if { [ "$O" = "$(stat -c %u:%g -- "$2")" ] || chown -- "$O" "$2" 2>/dev/null; } && chmod -- "$M" "$2"; then mv -f -- "$2" "$4" || exit 1; exit 0; fi; fi; '
+    '[ -w "$4" ] || exit 3; cat -- "$2" > "$4" || exit 1'
+)
+
+
 async def upload_target(directory: str) -> tuple[str, str, str]:
     """Where an upload into `directory` goes: ("ssh", "", "") or ("docker", helper container id, mounted folder).
     Checked before the body is read, as a stream can't be sent twice."""
@@ -463,18 +500,33 @@ async def upload(directory: str, name: str, size: int, body: AsyncIterator[bytes
             await fswrite.upload(cid, inner, name, size, body, root=MOUNT, owner=owner)
         return {"path": target, "via": "docker"}
     conn = await tunnel()._connection()
-    proc = await conn.create_process(shlex.join(["sh", "-c", 'cat > "$1"', "sh", target]), encoding=None)
-    received = 0
-    async for chunk in body:
-        received += len(chunk)
-        proc.stdin.write(chunk)
-        await proc.stdin.drain()
-    proc.stdin.write_eof()
-    await proc.wait()
-    if proc.exit_status != 0 or received != size:
-        err = (await proc.stderr.read()) if proc.exit_status != 0 else b""
-        raise FsError(err.decode("utf-8", "replace").strip() or "The upload was interrupted", 409)
-    return {"path": target, "via": "ssh"}
+    cmd = ["sh", "-c", _SSH_RECEIVE, "sh", directory, fswrite._temp_name("part"), str(size), name]
+    proc = await conn.create_process(shlex.join(cmd), encoding=None)
+    # _Body fails on a short or oversized upload and holds each chunk back until the next one (or the end)
+    # has arrived, so the script never gets all `size` bytes of an upload that fails.
+    chunks = fswrite._Body(body, size)
+    failed: Exception | None = None
+    try:
+        async for chunk in chunks:
+            proc.stdin.write(chunk)
+            await proc.stdin.drain()
+    except FsError as e:
+        failed = e  # the upload broke off: the script sees its input end short and removes the part
+    except (OSError, asyncssh.Error):
+        pass  # the script stopped reading (it failed); its exit code and stderr say why
+    try:
+        proc.stdin.write_eof()
+    except (OSError, asyncssh.Error):
+        pass
+    result = await proc.wait(check=False)
+    if failed is not None:
+        raise failed
+    if result.exit_status == 0:
+        return {"path": target, "via": "ssh"}
+    if result.exit_status == fsbrowse.DENIED:
+        raise fsbrowse.denied(target)
+    err = result.stderr.decode("utf-8", "replace").strip() if isinstance(result.stderr, bytes) else ""
+    raise FsError(fsbrowse._brief(err) or "The upload failed", 409)
 
 
 async def download(path: str) -> AsyncIterator[bytes]:
