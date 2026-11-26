@@ -1,0 +1,1588 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Every Pierside release, newest first: new features, fixes and changes.">
+      
+      
+      
+        <link rel="canonical" href="https://pierside.dev/changelog/">
+      
+      
+        <link rel="prev" href="../building/">
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/icon.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.2">
+    
+    
+      
+        <title>Changelog - Pierside</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.57a0d79d.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.fb2fffe2.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  
+  <style>/* Pierside colours (the extension's own theme). Inlined into every page by main.html (not a
+   separate file: one render-blocking request less). */
+:root, [data-md-color-scheme="default"] {
+  --md-primary-fg-color: #0a63ed;
+  --md-primary-fg-color--light: #3d8bff;
+  --md-primary-fg-color--dark: #084fbd;
+  --md-accent-fg-color: #0a63ed;
+}
+[data-md-color-scheme="slate"] {
+  --md-primary-fg-color: #1b1f24;
+  --md-primary-fg-color--light: #22272e;
+  --md-primary-fg-color--dark: #14171b;
+  --md-accent-fg-color: #58a6ff;
+  --md-default-bg-color: #1b1f24;
+  --md-typeset-a-color: #58a6ff;
+}
+/* The footer's small print: the theme's 45 % white is below 4.5:1 on its footer (Lighthouse). */
+.md-footer {
+  --md-footer-fg-color--light: #ffffffd9;
+  --md-footer-fg-color--lighter: #ffffffb3;
+}
+/* The header's tabs and repository facts: the theme dims them to 70 / 75 % white, 3.3:1 on our blue;
+   95 % is 4.9:1. The current tab, no longer set apart by brightness, is underlined. */
+.md-tabs__link { opacity: .95; }
+.md-tabs__item--active .md-tabs__link { text-decoration: underline 2px; text-underline-offset: .35em; }
+.md-source__facts { opacity: .95; }</style>
+  <link rel="icon" type="image/png" sizes="48x48" href="../assets/favicon-48.png">
+  <link rel="icon" type="image/png" sizes="96x96" href="../assets/favicon-96.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="../assets/favicon-192.png">
+  <link rel="apple-touch-icon" href="../assets/apple-touch-icon.png"><meta property="og:type" content="website">
+  <meta property="og:site_name" content="Pierside">
+  <meta property="og:title" content="Changelog – Pierside">
+  <meta property="og:description" content="Every Pierside release, newest first: new features, fixes and changes.">
+  <meta property="og:url" content="https://pierside.dev/changelog/">
+  <meta property="og:image" content="https://pierside.dev/assets/social-card.png">
+  <meta property="og:image:width" content="1280">
+  <meta property="og:image:height" content="640">
+  <meta property="og:image:alt" content="Pierside: a Docker Desktop-style container UI for Rancher Desktop">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Changelog – Pierside">
+  <meta name="twitter:description" content="Every Pierside release, newest first: new features, fixes and changes.">
+  <meta name="twitter:image" content="https://pierside.dev/assets/social-card.png">
+
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#changelog" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Pierside" class="md-header__button md-logo" aria-label="Pierside" data-md-component="logo">
+      
+  <img src="../assets/icon.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Pierside
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Changelog
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Light mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Light mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m14.3 16-.7-2h-3.2l-.7 2H7.8L11 7h2l3.2 9zM20 8.69V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12zm-9.15 3.96h2.3L12 9z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Dark mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Dark mode" for="__palette_2" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Automatic mode"  type="radio" name="__palette" id="__palette_2">
+    
+      <label class="md-header__button md-icon" title="Automatic mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog" aria-label="Search">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/Hemi131/Pierside" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Hemi131/Pierside
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href=".." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../install-and-update/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Install
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../remote-engines/" class="md-tabs__link">
+          
+  
+  
+  Documentation
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    <li class="md-tabs__item md-tabs__item--active">
+      <a href="./" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Changelog
+
+      </a>
+    </li>
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+                
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" hidden>
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Pierside" class="md-nav__button md-logo" aria-label="Pierside" data-md-component="logo">
+      
+  <img src="../assets/icon.svg" alt="logo">
+
+    </a>
+    Pierside
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/Hemi131/Pierside" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Hemi131/Pierside
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../install-and-update/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Documentation
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Documentation
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../remote-engines/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Remote engines over SSH
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../what-works-where/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    What works where
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../compose/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Compose projects
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ports/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Ports and forwarding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../files-and-volumes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Files, volumes and the editor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ai-access/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    AI access (MCP server)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../alerts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Alerts and notifications
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../building/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Building from source
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Changelog
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Changelog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#unreleased" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Unreleased
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#151-2026-11-26" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.5.1 - 2026-11-26
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#150-2026-11-25" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.5.0 - 2026-11-25
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#145-2026-11-24" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.4.5 - 2026-11-24
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#144-2026-11-19" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.4.4 - 2026-11-19
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#143-2026-11-18" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.4.3 - 2026-11-18
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#142-2026-11-18" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.4.2 - 2026-11-18
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#141-2026-11-06" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.4.1 - 2026-11-06
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#140-2026-10-31" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.4.0 - 2026-10-31
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#132-2026-10-28" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.3.2 - 2026-10-28
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#131-2026-10-19" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.3.1 - 2026-10-19
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#130-2026-10-17" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.3.0 - 2026-10-17
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#120-2026-10-15" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.2.0 - 2026-10-15
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#111-2026-10-11" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.1.1 - 2026-10-11
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#110-2026-10-11" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.1.0 - 2026-10-11
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#100-2026-10-10" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.0.0 - 2026-10-10
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#041-2026-10-07" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0.4.1 - 2026-10-07
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#040-2026-10-07" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0.4.0 - 2026-10-07
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#030-2026-10-06" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0.3.0 - 2026-10-06
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+                
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#unreleased" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Unreleased
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#151-2026-11-26" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.5.1 - 2026-11-26
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#150-2026-11-25" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.5.0 - 2026-11-25
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#145-2026-11-24" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.4.5 - 2026-11-24
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#144-2026-11-19" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.4.4 - 2026-11-19
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#143-2026-11-18" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.4.3 - 2026-11-18
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#142-2026-11-18" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.4.2 - 2026-11-18
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#141-2026-11-06" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.4.1 - 2026-11-06
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#140-2026-10-31" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.4.0 - 2026-10-31
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#132-2026-10-28" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.3.2 - 2026-10-28
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#131-2026-10-19" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.3.1 - 2026-10-19
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#130-2026-10-17" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.3.0 - 2026-10-17
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#120-2026-10-15" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.2.0 - 2026-10-15
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#111-2026-10-11" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.1.1 - 2026-10-11
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#110-2026-10-11" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.1.0 - 2026-10-11
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#100-2026-10-10" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.0.0 - 2026-10-10
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#041-2026-10-07" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0.4.1 - 2026-10-07
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#040-2026-10-07" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0.4.0 - 2026-10-07
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#030-2026-10-06" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0.3.0 - 2026-10-06
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+  
+
+
+
+
+<h1 id="changelog">Changelog<a class="headerlink" href="#changelog" title="Permanent link">&para;</a></h1>
+<p>Each release of Pierside, newest first. Install a specific one with <code>rdctl extension install ghcr.io/hemi131/pierside:&lt;version&gt;</code>.</p>
+<h2 id="unreleased">Unreleased<a class="headerlink" href="#unreleased" title="Permanent link">&para;</a></h2>
+<h2 id="151-2026-11-26">1.5.1 - 2026-11-26<a class="headerlink" href="#151-2026-11-26" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Server files and Server disk no longer freeze when Docker on the server stops answering while SSH still works. Folders your SSH user may not read, the usual places and the sizes measured through Docker now give up after 30 seconds (60 seconds for a step in a helper) and say that Docker isn't answering, and one stuck folder no longer holds up all the others. Folders you can read yourself keep working meanwhile, and the Server files and Server disk pages open within a few seconds. A slow Docker no longer greys out the switch for using Docker there; only a server where Docker can't help at all (rootless, user remapping) does. When the usual places on the Server disk page can't be listed, the page says so and offers <strong>Try again</strong> instead of leaving the list out.</li>
+</ul>
+<h2 id="150-2026-11-25">1.5.0 - 2026-11-25<a class="headerlink" href="#150-2026-11-25" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>AI access: scripts.</strong> With the new permission <strong>Run scripts</strong> (off by default), an assistant can send a short Python script that calls Pierside's tools, and only what the script prints comes back to it. A job such as "count the errors in the logs of every running container" then takes one step and far less of the assistant's context. Every call the script makes is checked like a direct one. The script runs in a sandbox on this computer with no network and no access to Docker or your files, and you can see each script before it runs. Changes a script makes can be shown to you as a list first, asked about at the first change of each kind, or one by one. See <a href="https://github.com/Hemi131/Pierside/blob/main/ai-access.md#scripts">AI access</a>.</li>
+<li>Two Pierside installs on one engine (for example a local build next to the published one, or two computers using the same SSH server) no longer remove each other's helper containers when they start, stop or switch engines. Before, this could cut off the other install's open volume browser, Server files, debug shell or root terminal.</li>
+<li>Narrow windows (for example Pierside snapped to half the screen): the AI access connections and the Engines list no longer run off the right edge. Like the Containers list, they hide their less important columns to fit, keep the actions visible, and have a <strong>Columns</strong> button to choose. Page buttons such as <strong>New connection</strong> keep their label on one line and move below the title when there's no room, and the Containers list's <strong>Only show running containers</strong> switch moves below the search box. Smaller tables (details, Ports, Swarm) scroll sideways inside their frame instead of widening the page.</li>
+<li>AI access: a connection's <strong>Last used</strong> now shows when the assistant last used a tool. Before, it showed "just now" for as long as the assistant was open, because its background checks were counted too.</li>
+<li>AI access: the assistant's engine list now also names the engines its connection may not use, marked as without permission, so it can ask you for one in Pierside instead of not knowing it exists. It sees only their names, not their addresses, and Pierside doesn't connect to them for it. Naming such an engine in a call now says that permission is missing, not that the engine is unknown.</li>
+<li>AI access: the assistant now gets each Compose project's state (running, partly running, paused, exited or down) and, for a project that is down, when it was last seen. Asking for the logs of a project that is down, or starting it, now says that it's down and how to bring it up, instead of that there's no such project. In the Containers list, <strong>Down</strong> explains itself when you hover over it.</li>
+</ul>
+<h2 id="145-2026-11-24">1.4.5 - 2026-11-24<a class="headerlink" href="#145-2026-11-24" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>AI access: structured results.</strong> Every tool can also return its result as structured data with a schema, for clients that use MCP's <code>structuredContent</code>: add <code>--structured</code> to the connection command (see <a href="https://github.com/Hemi131/Pierside/blob/main/ai-access.md#structured-results">AI access</a>). Without it nothing changes for the assistant.</li>
+<li><strong>AI access:</strong> long results are cut at whole lines or entries and say what was left out and how to continue: the newest log lines are kept (before, the newest could be the ones cut off), big folders and lists come in pages (<code>offset</code>), and a long file, Compose file or Compose configuration continues at the next line instead of being cut off or refused. Searching files works in folders with long paths up to the 20,000-file limit. With structured results, a file's content keeps its line endings and says whether it was read whole, so it can be edited and written back unchanged. A command whose exit code isn't known (its output was too long to read to the end, or the engine didn't report it in time) says so instead of reporting 0.</li>
+<li><strong>AI access:</strong> a command the assistant runs in a container is now stopped, with the processes it started, when it passes its time limit or prints more than can be read. Before, it kept running in the container after the answer (for example <code>tail -f</code> or <code>ping</code>). Background programs left behind by a command that has itself already ended are not stopped (see <a href="../ai-access/">AI access</a>).</li>
+<li><strong>AI access:</strong> reading, listing or searching files in a running container (or a volume) can no longer be led outside the allowed paths by a process in that container that replaces a folder with a symbolic link right after Pierside checked the path (in containers that have <code>sh</code> and <code>cat</code>; see <a href="../ai-access/">AI access</a> for the details). Folders are now listed as root, like files are read, so a listing no longer depends on the container's own user. A path starting with <code>//</code> is read like the same path with one <code>/</code>.</li>
+<li><strong>AI access:</strong> writing, creating, deleting files and changing permissions in a running container can no longer be led outside the allowed paths by a process in that container that replaces a folder with a symbolic link right after Pierside checked the path. This holds also while a whole folder is deleted or its permissions are changed. An existing file is now written in place, so it keeps its hard links too. In a running container without <code>sh</code> the assistant can't write files unless you tick <strong>Also write to running containers that have no shell</strong> under <strong>Change files</strong> (off by default); stopped containers are written as before. See <a href="https://github.com/Hemi131/Pierside/blob/main/ai-access.md#files">AI access</a>.</li>
+<li><strong>AI access:</strong> a command stopped at its time or output limit now also takes along what it sent into the background by forking twice (<code>(cmd &amp;)</code>), which used to keep running in the container. Only a program that detaches itself with <code>setsid</code> escapes, and the message says so.</li>
+<li><strong>AI access:</strong> port forwards follow a renamed container and are removed when their container is deleted, also on SSH engines (within a minute; before, only at the next connection to the port). Until then the assistant sees such a forward marked as having lost its container and can remove it; before, it couldn't see it at all after a rename.</li>
+<li><strong>AI access:</strong> answers are kept to about 60,000 characters (from 200,000), so that Claude Code shows them directly instead of saving them to a file; longer results continue as before (next page, next lines).</li>
+<li><strong>AI access:</strong> smaller fixes. A log request above the connection's maximum says it was cut to it. A file line too long for one answer says where the file goes on. An image's long build commands are marked as shortened, and the assistant can get one whole (<code>layer</code>). A Compose project that is down but remembered shows its files in its details. Writing a file into a missing folder names that folder. Killing a container with a signal waits a moment before reporting its state. Swarm service logs name the task of each line. The <code>docker run</code> command of a container (also <strong>Copy docker run command</strong> in the containers list) includes its other networks and network aliases.</li>
+<li><strong>AI access requests:</strong> the request for <strong>Run commands</strong> says that it can read every file and environment value in the containers. A new request's allow buttons react only after a moment, so a click meant for the previous question can't answer it, and a message says what you decided. Requests for containers that are never shared (extensions, Kubernetes) are refused, and the request says such containers never match. Editing a connection still ends what you allowed for single sessions, but now says how many sessions lost it, and the assistant is told it can ask again (also when it uses a tool it had a moment ago).</li>
+<li><strong>Files:</strong> uploading, editing and creating a folder below a tmpfs or a mount the container made itself (the <code>/tmp</code> of a Docker-in-Docker image, for example) now changes what the container sees. Before, the change went into the folder hidden underneath: Pierside reported success, but the file never showed up.</li>
+<li><strong>Files, volume Stored data and Server files:</strong> an upload that breaks off (window closed, connection lost) no longer replaces the existing file with the part that arrived. Uploads go to a temporary file next to the target and replace it only once complete; on a server reached over SSH, an existing file keeps its owner and permissions. A saved edit is likewise complete before the file is changed. In a container started with <code>--cap-drop ALL</code>, where root may not write into another user's folder, the change is made as the container's own user.</li>
+<li><strong>Files:</strong> a paused container's file actions say to resume it, instead of failing with an engine error.</li>
+<li><strong>AI access:</strong> reading and writing files no longer reaches the folder hidden under a tmpfs. A paused container's files are refused with a request to resume it (before, they could be read and written through Docker's file copy, which sees what lies under the container's mounts). In a running container without a shell, paths on a tmpfs are refused, also with <strong>Also write to running containers that have no shell</strong> on, and a file on a tmpfs is reported as such instead of "doesn't exist".</li>
+<li><strong>Files, volume Stored data and Server files:</strong> a delete or permission change that fails is now reported as failed; before, it could look successful when the engine reported the result late. When it fails for many files at once, the message shows the first three and how many more. A container without <code>find</code> / <code>stat</code> (or without a shell) says that its files can't be browsed, instead of showing an empty folder, and a file preview no longer shows an empty file when the file couldn't be read.</li>
+</ul>
+<h2 id="144-2026-11-19">1.4.4 - 2026-11-19<a class="headerlink" href="#144-2026-11-19" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Website:</strong> Pierside has its own site, <a href="https://pierside.dev">pierside.dev</a>, with an overview of what it does, the installation guide, the documentation (with search) and this changelog. Pierside's About dialog (click the version in the footer) links to it.</li>
+</ul>
+<h2 id="143-2026-11-18">1.4.3 - 2026-11-18<a class="headerlink" href="#143-2026-11-18" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Terminals: <strong>Ctrl+S</strong> no longer freezes the shell. It used to stop all output until Ctrl+Q (the terminal's old flow control), which looked like a hung shell. Full-screen programs such as <code>nano</code> still get it.</li>
+<li>Terminals (the server terminal of an SSH engine and a container's shell): <strong>right click</strong> works as in Windows Terminal: it copies the selected text, or pastes when nothing is selected.</li>
+<li>The server terminal of an SSH engine edits the command line by word, as a container's shell already did: <strong>Ctrl+Backspace</strong> and <strong>Ctrl+Delete</strong> delete a word, <strong>Ctrl+Left</strong> / <strong>Ctrl+Right</strong> move by word, and text is selected with <strong>Shift+arrows</strong>, by word with <strong>Ctrl+Shift+Left</strong> / <strong>Right</strong>, or to the line's ends with <strong>Shift+Home</strong> / <strong>End</strong> (then <strong>Ctrl+C</strong> copies it). On the command line a selection works as in an editor: <strong>Left</strong> / <strong>Right</strong> go to its start / end, <strong>Backspace</strong> / <strong>Delete</strong> remove it, typing or pasting replaces it, and <strong>Ctrl+X</strong> cuts it (the command line is found after a prompt ending in <code>$</code>, <code>#</code>, <code>&gt;</code> or <code>%</code>). Full-screen programs such as <code>vim</code> or <code>top</code> still get the keys unchanged.</li>
+</ul>
+<h2 id="142-2026-11-18">1.4.2 - 2026-11-18<a class="headerlink" href="#142-2026-11-18" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Alerts no longer spam.</strong> A problem is reported once while it goes on, with a reminder every two hours, instead of again every few minutes for each kind of trouble: a restart loop that also makes the container unhealthy is one alert, and a Swarm service whose tasks all fail (for example an image that doesn't exist) is one alert, not one per replica. Alerts arriving together are one message, desktop notifications come at most every 30 seconds, and the message has <strong>Mute 1 h</strong> and <strong>Pause all 15 min</strong>. See <a href="https://github.com/Hemi131/Pierside/blob/main/alerts.md#how-often">Alerts</a>.</li>
+<li><strong>Cancel switch on a slow server:</strong> pressed after Pierside had already connected (an overloaded server answers slowly, so the switch can finish while you reach for the button), it used to do nothing, and you then waited for the slow server to load. Now it takes you back to the engine you came from. Leaving a slow server is also quicker: Pierside waits at most 10 seconds to clean up there.</li>
+</ul>
+<h2 id="141-2026-11-06">1.4.1 - 2026-11-06<a class="headerlink" href="#141-2026-11-06" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Rancher Desktop 1.25: the extension lost its own look (very large headings, uppercase buttons, default colours) because Rancher now provides a minimal theme of its own. Pierside uses its own theme again.</li>
+</ul>
+<h2 id="140-2026-10-31">1.4.0 - 2026-10-31<a class="headerlink" href="#140-2026-10-31" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Root terminal</strong> (SSH engines): a switch in the terminal's header opens that server's terminal as root, through a privileged helper container. Off by default, remembered per server, and it asks before turning on. See <a href="https://github.com/Hemi131/Pierside/blob/main/remote-engines.md#root-terminal">Remote engines</a>.</li>
+<li>A file or process action on a server (upload, delete, change permissions, save, end a process) could finish on the other server if you switched engines while it ran. It now stops with a message instead, also when a second window still shows the previous server.</li>
+<li><strong>Cancel switch</strong> stops the switch you see, not whichever one happens to be connecting, and only one switch runs at a time in a window.</li>
+<li>A server setting (Root terminal, or using Docker where you have no permission) is refused if the active engine changed while you were answering, instead of landing on another server.</li>
+<li>Containers: the icons of containers inside a Compose project are no longer cut off after a column has been resized.</li>
+</ul>
+<h2 id="132-2026-10-28">1.3.2 - 2026-10-28<a class="headerlink" href="#132-2026-10-28" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Server performance no longer scrolls sideways in a narrow window: the process list leaves out the Running, User, Disk and Container columns as it gets narrower (the command's tooltip shows what they would), and the charts and the switches at the top fit the width.</li>
+</ul>
+<h2 id="131-2026-10-19">1.3.1 - 2026-10-19<a class="headerlink" href="#131-2026-10-19" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Switching away from an SSH engine whose server had been turned off could take minutes, and other engines seemed impossible to switch to meanwhile. Requests waiting for the lost server now get its answer together instead of each trying to reconnect in turn, and the switch no longer waits for clean-up on a server it can't reach.</li>
+<li>A switch to an engine that doesn't answer can be cancelled: <strong>Cancel switch</strong> in the engine menu, or <strong>Cancel</strong> in place of <strong>Switch</strong> on Manage engines and Engines at a glance.</li>
+<li>Server performance: on a narrow window, the "Order held" note no longer moves the process list down when it appears, which ended the hold at once.</li>
+</ul>
+<h2 id="130-2026-10-17">1.3.0 - 2026-10-17<a class="headerlink" href="#130-2026-10-17" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Server performance</strong> (SSH engines, in the bottom bar): like <code>htop</code> for the server, with the container of each process. CPU, memory, disks and network with 10-minute charts, a note when something stands out (low memory, swapping, waiting for the disk, high load), and the processes sorted by CPU, memory or disk I/O, or grouped by container. Processes can be ended, forced to end or given a lower priority. Nothing has to be installed on the server.</li>
+<li><strong>Server alerts:</strong> switch on <strong>Alert me about this server</strong> to be told when an SSH server's memory is almost full, it keeps swapping, its load stays high, or a disk is almost full, checked every 30 seconds whichever engine is active.</li>
+<li><strong>Security:</strong> a request to Pierside's local port that claimed to come from a development web page (<code>Origin: http://localhost:3000</code>) was let in without the session token, so any program on your computer, or a web page served on that port, could get full access to Docker through it. Every request now needs the token.</li>
+<li><strong>Security:</strong> AI access accepted names such as <code>../containers/x</code> for images and networks, which reached other parts of the Docker API: an assistant could delete a container outside its scope or put a container on the host's network. Such names are refused now.</li>
+<li>Fixed: AI access could start a container on the host's network when given that network's ID instead of its name.</li>
+<li>Fixed: switching off <strong>Watch in the background</strong> (or removing a watched engine) left its connection open and could stop the page from updating.</li>
+<li>Fixed: an unreachable engine could make healthy watched engines look unreachable too.</li>
+<li><strong>AI access:</strong> environment values with spaces were only partly hidden in <code>container_run_command</code>, and <code>compose_config</code> / <code>read_compose_files</code> showed secrets; with "Show environment values" off, variables are no longer filled in, values in environment, build arguments, driver options, inline contents and <code>x-</code> blocks are hidden, and <code>read_compose_files</code> shows the merged configuration instead of the raw files. A volume used by containers outside a connection's scope is no longer visible to it, and lists name only the containers it shares. Starting a container with a host folder mounted now counts as destructive for "ask before destructive actions".</li>
+<li>Fixed: Swarm "task keeps failing" alerts never came on servers whose clock isn't set to UTC.</li>
+<li>Fixed: Engines at a glance showed 0 CPU / memory for engines with many containers (now what could be measured, marked "≥"), counted Kubernetes' and Pierside's own containers on the active engine, and could call a container "restarting" hours after it stopped.</li>
+<li>Fixed: switching engines removed Pierside's helper containers on the new engine instead of the old one, and left shells of the old engine running.</li>
+<li>Fixed: pruning volumes stopped running file downloads, Server files and disk measurements and debug shells.</li>
+<li>Fixed: after a brief connection drop (e.g. an SSH hiccup), logs repeated up to 1000 lines; a single failed check could mark a container "removed". Merged Compose logs now also start in time order across slow and fast services.</li>
+<li>Fixed: <strong>Images → Clean up → All unused</strong> also deleted the images of Rancher Desktop, Kubernetes and extensions without a running container.</li>
+<li>Fixed: Swarm stack delete reported success when nothing could be deleted; Compose <strong>Start all</strong> also started <code>docker compose run</code> one-off containers; <strong>Copy docker run command</strong> wrote an invalid <code>-p 127.0.0.1:80</code> for ports with any host port and quoted a multi-word entrypoint as one word.</li>
+<li>Fixed: a settings file that couldn't be read (engines, port forwards) was overwritten empty on the next change; it is now kept as a copy.</li>
+<li>Fixed: a second confirmation (e.g. two port conflicts when starting several containers) replaced the first, and the action then never finished.</li>
+<li>Fixed: in a file browser, a file that loaded slowly could show up, and be saved, under the name of the file clicked after it.</li>
+<li>Fixed: pausing a container ended its Exec shell and dropped unsaved changes in its Files tab; both now carry on after Resume.</li>
+<li>Fixed: logs of a container with a terminal (TTY) could clear or switch the log view's screen; only colours and links are kept from such codes now.</li>
+<li>Fixed: removing an AI connection that was set up "for this project folder only" left it registered in the assistant (for connections set up from now on).</li>
+<li>Fixed: closing the bottom Docker console left commands such as <code>logs -f</code> running; Ctrl+F no longer takes the key from a shell (vim, less); Images: deleting from an image's page warns about Rancher Desktop's images and removes only the tag shown; IPv6 port links; Swarm secrets and configs show load errors instead of spinning; cancelling a Compose run right after starting it works; lists catch up after the live connection was briefly lost.</li>
+</ul>
+<h2 id="120-2026-10-15">1.2.0 - 2026-10-15<a class="headerlink" href="#120-2026-10-15" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Engines at a glance</strong> is its own page now, opened from the second line of the engine switcher at the top of the sidebar. It keeps itself up to date (every 30 seconds by default; 10 seconds to 5 minutes, or only on Refresh), shows the CPU and memory each engine's containers use, and a click on a problem opens the container on its engine.</li>
+<li><strong>Watch an engine in the background:</strong> a switch on each engine's card. A watched engine's alerts (restart loops, out of memory, unhealthy, failing Swarm services) arrive while another engine is active, named with the engine, and you are told when it can't be reached and when it is back. Recent alerts from all engines are listed on the page.</li>
+<li><strong>Command palette</strong> in the Exec tab: save the commands you type often under your own labels and run them in any container's shell with <strong>Commands</strong> or Ctrl+Shift+P. Each command either runs right away or is only typed so you can change it first, and can be offered everywhere, for an image (<code>postgres</code>, <code>mycorp/*</code>) or for a Compose project / service. One list for all engines, in Rancher and in the separate window.</li>
+<li>Fixed: with a search in the logs, every batch of new lines moved to the next match and scrolled there. The current match and the view now stay where they are; new matches are still highlighted.</li>
+<li>Fixed: containers started again and again by something other than Docker, such as a GitLab Runner's job containers, were reported as "keeps restarting" / "keeps crashing". Only containers that Docker itself restarts (restart policy <code>always</code>, <code>unless-stopped</code>, or <code>on-failure</code> after a failure) are reported now.</li>
+<li>Fixed: on smaller screens, a tooltip near the right edge (such as Refresh on the Server disk page) could make the whole page jump a little to the left.</li>
+</ul>
+<h2 id="111-2026-10-11">1.1.1 - 2026-10-11<a class="headerlink" href="#111-2026-10-11" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Fixed: desktop notifications never appeared inside Rancher Desktop on Windows. They are now shown through Rancher Desktop's own notification call there; the separate window keeps using the browser's.</li>
+</ul>
+<h2 id="110-2026-10-11">1.1.0 - 2026-10-11<a class="headerlink" href="#110-2026-10-11" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Alerts:</strong> restart loops are found more reliably. A container whose command keeps finishing cleanly and being restarted is now reported too (with different advice than a crashing one), stopping and starting a container by hand is no longer mistaken for a crash, and slow loops (Docker waits up to a minute between attempts) are no longer missed. New: a <strong>Swarm service whose task keeps failing</strong> is reported, on any node. See <a href="../alerts/">docs/alerts.md</a>.</li>
+<li><strong>Desktop notifications</strong> for these alerts when Pierside is open but not in front; switch them on in the dialog behind the version number.</li>
+<li><strong>Engines: At a glance.</strong> The Engines page shows for every engine whether it can be reached, how many containers run and which need attention, without switching to it.</li>
+<li><strong>Server disk: the usual places.</strong> A list of where space usually goes on a server (Docker's data, container logs, the journal, package caches, temporary files, home folders), measured with one click.</li>
+<li>File editor: typing in large files is faster.</li>
+<li>Fixed: switching to the SSH engine that is already active (for example from a second window) broke its connection until you switched away and back.</li>
+<li><strong>AI access, security:</strong></li>
+<li>New containers can no longer reach host system folders through a symbolic link: a host path with a link in it is refused, and so is a path inside a folder that a container the assistant can reach mounts writable. The list of refused system folders now also has <code>/etc</code>, <code>/root</code>, <code>/usr</code>, <code>/boot</code>, <code>/bin</code>, <code>/sbin</code>, <code>/lib</code> and, on Windows, Rancher Desktop's WSL socket folder.</li>
+<li>Answering an assistant's request for more access applies only to the request you saw: if the assistant changed its request meanwhile, nothing is granted and the new request is shown.</li>
+<li>Engine events no longer show Swarm service, secret and config names to a connection without the Swarm permission.</li>
+<li><code>prune</code> of all unused images keeps the images of Rancher Desktop extensions and Kubernetes, as it promised.</li>
+<li>Asking for a wider file path or name pattern than a connection has (e.g. <code>/app/**</code> when it has <code>/app/*</code>) now reaches you instead of being answered "already allowed".</li>
+<li><strong>Adding an SSH engine</strong> shows the server's host-key fingerprint first; your password or key is sent only after you confirm it.</li>
+<li><strong>Downloads</strong> from volumes, containers and server files fail visibly if they are cut short, instead of saving a shorter file; long downloads and uploads through Pierside's helper containers are no longer interrupted after a minute.</li>
+<li><strong>Logs:</strong> lines are no longer dropped when a container writes to stdout and stderr at the same moment.</li>
+<li><strong>Live views</strong> (logs, shell, stats, pull progress, terminal) reconnect by themselves after Pierside's backend restarts, instead of staying disconnected until Pierside is reopened.</li>
+<li><strong>Port forwards to SSH engines</strong> follow a container that was recreated (new address or port), and go away when it is removed, instead of reaching whatever now has its old address.</li>
+<li><strong>Server files:</strong> uploading into, or downloading from, a place your SSH user can't access asks whether Docker may be used, instead of showing "[object Object]".</li>
+<li><strong>Containers:</strong> "Remove service" on a Swarm service asks first and reports the result.</li>
+<li>Cancelling <code>docker compose</code> on an SSH engine stops it on the server; stopping Server disk stops its measurements there too.</li>
+</ul>
+<h2 id="100-2026-10-10">1.0.0 - 2026-10-10<a class="headerlink" href="#100-2026-10-10" title="Permanent link">&para;</a></h2>
+<p>Pierside 1.0: next to Docker itself, it now also works with the server behind an SSH engine.</p>
+<ul>
+<li><strong>Server files:</strong> with an SSH engine active, <strong>Server files</strong> in the bottom bar browses and edits the files of that server with the same file browser and editor, as your SSH user. Where that user has no permission but may use Docker, Pierside can work through a short-lived helper container instead (asked once per server, marked with a badge, read-only unless you change something).</li>
+<li><strong>Server disk:</strong> next to it, <strong>Server disk</strong> shows how full the server's filesystems are and which folders take the space. Folders are measured one by one as you open them, at low priority, with a time limit and a stop button; folders you can't read can be measured through Docker. It only reads.</li>
+<li><strong>Find by name</strong> in every file browser (containers, volumes, server files): typing narrows the current folder, Enter searches its subfolders.</li>
+<li><strong>File editor:</strong></li>
+<li><strong>Review changes</strong> shows your edit as a diff before saving.</li>
+<li>Syntax errors in JSON and YAML are underlined, and Compose files are checked against the official Compose schema (bundled, nothing is downloaded).</li>
+<li>VS Code keyboard shortcuts (Ctrl+D, Alt+Up/Down, Ctrl+/, Ctrl+L and more).</li>
+<li>Bracket pair colours and indentation guides.</li>
+<li><strong>AI access:</strong></li>
+<li><strong>Add to Claude Code</strong> / <strong>Add to Devin CLI</strong> registers a connection with one click, for all your projects or for one project folder you choose, through a small helper program Rancher Desktop installs with the extension. The dialog shows the command the button runs. Removing a connection also removes it from the assistant.</li>
+<li>The connection dialog is simpler, and says when a connection is trusted instead of promising a question that won't come.</li>
+<li><strong>Containers:</strong> a Compose project that is partly running has a start button for its stopped containers next to Stop all, in the list and on the project page.</li>
+<li><strong>Files in containers:</strong> a folder the container's user can't read now says "Permission denied" instead of looking empty.</li>
+<li><strong>Docs:</strong> <a href="../what-works-where/">What works where</a> lists what differs between the Pierside tab in Rancher Desktop and the separate window, and between the local engine and SSH engines, with the reason for each.</li>
+</ul>
+<h2 id="041-2026-10-07">0.4.1 - 2026-10-07<a class="headerlink" href="#041-2026-10-07" title="Permanent link">&para;</a></h2>
+<ul>
+<li>AI access: the connection dialog also shows the command for Devin CLI (<code>devin mcp add</code>).</li>
+</ul>
+<h2 id="040-2026-10-07">0.4.0 - 2026-10-07<a class="headerlink" href="#040-2026-10-07" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>AI access:</strong> a built-in MCP server for assistants such as Claude Code, with 66 tools covering containers, files, Compose projects, images, volumes, networks, ports, engine information, clean-up and Swarm, on the local engine and on SSH engines. Each connection has its own limits: which engines and containers, which of 20 permissions, and which file paths; or "Allow everything". By default no secret is stored with the assistant: you allow each session in Pierside, or trust a connection for a period or for good, actions that change something can ask every time, and the assistant can ask you for more access when it needs it; an access token is available for unattended use. Calls are listed under Recent activity. See <a href="../ai-access/">docs/ai-access.md</a>.</li>
+<li>Troubleshooting: what to do when installing reports <code>invalid extension metadata</code>.</li>
+</ul>
+<h2 id="030-2026-10-06">0.3.0 - 2026-10-06<a class="headerlink" href="#030-2026-10-06" title="Permanent link">&para;</a></h2>
+<p>First release under the name Pierside.</p>
+<ul>
+<li><strong>Containers:</strong> live list grouped by Compose project; start, stop, restart and delete for single containers, projects and selections; port links; port-conflict hints; health checks; alerts for containers that crash, restart in a loop or run out of memory.</li>
+<li><strong>Container details:</strong> logs (search, timestamps, download, copy as Markdown), inspect, bind mounts, interactive shell, debug shell for containers without one, file browser, live stats.</li>
+<li><strong>Compose:</strong> merged colour-coded logs; Up, Down, Pull and recreate and View configuration with the common flags; projects stay listed after <code>down</code>.</li>
+<li><strong>Files:</strong> upload, edit in a code editor with syntax highlighting, delete and change permissions, in containers and volumes.</li>
+<li><strong>Images:</strong> pull, run with options, layers, prune, copy to another engine.</li>
+<li><strong>Volumes and networks:</strong> create, inspect and prune; connect and disconnect containers. Items that belong to Rancher Desktop extensions are hidden unless you show them, are skipped by Prune, and deleting one asks with a warning first.</li>
+<li><strong>Disk usage:</strong> what takes space, with one-click cleanup.</li>
+<li><strong>Ports:</strong> forward container ports to <code>localhost</code>, also from remote servers.</li>
+<li><strong>Remote engines over SSH</strong>, each with its own name and colour.</li>
+<li><strong>Swarm:</strong> stacks, services, tasks, nodes, secrets and configs.</li>
+<li><strong>Terminal:</strong> Docker console locally, a full shell on SSH engines.</li>
+<li><strong>Updates:</strong> the footer shows the version and tells you when a newer release exists; old Pierside images are removed automatically.</li>
+</ul>
+
+
+
+
+
+
+
+  
+  
+
+
+
+
+  
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+        
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../building/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Building from source">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Building from source
+              </div>
+            </div>
+          </a>
+        
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  <div class="md-copyright__highlight">
+    Pierside · <a href="https://github.com/Hemi131/Pierside/blob/main/LICENSE">Apache-2.0</a> ·
+    <a href="../privacy/">Privacy and credits</a>
+  </div>
+  Not affiliated with Docker, Inc., SUSE, Anthropic or Cognition. Docker, Rancher Desktop, Claude, Claude Code,
+  Devin and other names are trademarks of their respective owners.
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://github.com/Hemi131/Pierside" target="_blank" rel="noopener" title="github.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://hub.docker.com/r/hemi131/pierside" target="_blank" rel="noopener" title="hub.docker.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M349.9 236.3h-66.1v-59.4h66.1zm0-204.3h-66.1v60.7h66.1zm78.2 144.8H362v59.4h66.1zm-156.3-72.1h-66.1v60.1h66.1zm78.1 0h-66.1v60.1h66.1zm276.8 100c-14.4-9.7-47.6-13.2-73.1-8.4-3.3-24-16.7-44.9-41.1-63.7l-14-9.3-9.3 14c-18.4 27.8-23.4 73.6-3.7 103.8-8.7 4.7-25.8 11.1-48.4 10.7H2.4c-8.7 50.8 5.8 116.8 44 162.1 37.1 43.9 92.7 66.2 165.4 66.2 157.4 0 273.9-72.5 328.4-204.2 21.4.4 67.6.1 91.3-45.2 1.5-2.5 6.6-13.2 8.5-17.1zm-511.1-27.9h-66v59.4h66.1v-59.4zm78.1 0h-66.1v59.4h66.1zm78.1 0h-66.1v59.4h66.1zm-78.1-72.1h-66.1v60.1h66.1z"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.footer", "search.highlight", "content.code.copy", "toc.follow"], "search": "../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.a5f9d56c.min.js"></script>
+      
+    
+  </body>
+</html>

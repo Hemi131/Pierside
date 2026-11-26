@@ -1,0 +1,1673 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Let Claude Code, Devin CLI or any MCP client work with your Docker engines through Pierside's built-in MCP server, within limits you set.">
+      
+      
+      
+        <link rel="canonical" href="https://pierside.dev/ai-access/">
+      
+      
+        <link rel="prev" href="../files-and-volumes/">
+      
+      
+        <link rel="next" href="../alerts/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/icon.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.2">
+    
+    
+      
+        <title>AI access (MCP server) - Pierside</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.57a0d79d.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.fb2fffe2.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  
+  <style>/* Pierside colours (the extension's own theme). Inlined into every page by main.html (not a
+   separate file: one render-blocking request less). */
+:root, [data-md-color-scheme="default"] {
+  --md-primary-fg-color: #0a63ed;
+  --md-primary-fg-color--light: #3d8bff;
+  --md-primary-fg-color--dark: #084fbd;
+  --md-accent-fg-color: #0a63ed;
+}
+[data-md-color-scheme="slate"] {
+  --md-primary-fg-color: #1b1f24;
+  --md-primary-fg-color--light: #22272e;
+  --md-primary-fg-color--dark: #14171b;
+  --md-accent-fg-color: #58a6ff;
+  --md-default-bg-color: #1b1f24;
+  --md-typeset-a-color: #58a6ff;
+}
+/* The footer's small print: the theme's 45 % white is below 4.5:1 on its footer (Lighthouse). */
+.md-footer {
+  --md-footer-fg-color--light: #ffffffd9;
+  --md-footer-fg-color--lighter: #ffffffb3;
+}
+/* The header's tabs and repository facts: the theme dims them to 70 / 75 % white, 3.3:1 on our blue;
+   95 % is 4.9:1. The current tab, no longer set apart by brightness, is underlined. */
+.md-tabs__link { opacity: .95; }
+.md-tabs__item--active .md-tabs__link { text-decoration: underline 2px; text-underline-offset: .35em; }
+.md-source__facts { opacity: .95; }</style>
+  <link rel="icon" type="image/png" sizes="48x48" href="../assets/favicon-48.png">
+  <link rel="icon" type="image/png" sizes="96x96" href="../assets/favicon-96.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="../assets/favicon-192.png">
+  <link rel="apple-touch-icon" href="../assets/apple-touch-icon.png"><meta property="og:type" content="website">
+  <meta property="og:site_name" content="Pierside">
+  <meta property="og:title" content="AI access (MCP server) – Pierside">
+  <meta property="og:description" content="Let Claude Code, Devin CLI or any MCP client work with your Docker engines through Pierside's built-in MCP server, within limits you set.">
+  <meta property="og:url" content="https://pierside.dev/ai-access/">
+  <meta property="og:image" content="https://pierside.dev/assets/social-card.png">
+  <meta property="og:image:width" content="1280">
+  <meta property="og:image:height" content="640">
+  <meta property="og:image:alt" content="Pierside: a Docker Desktop-style container UI for Rancher Desktop">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="AI access (MCP server) – Pierside">
+  <meta name="twitter:description" content="Let Claude Code, Devin CLI or any MCP client work with your Docker engines through Pierside's built-in MCP server, within limits you set.">
+  <meta name="twitter:image" content="https://pierside.dev/assets/social-card.png">
+
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#ai-access-mcp-server" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Pierside" class="md-header__button md-logo" aria-label="Pierside" data-md-component="logo">
+      
+  <img src="../assets/icon.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Pierside
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              AI access (MCP server)
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Light mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Light mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m14.3 16-.7-2h-3.2l-.7 2H7.8L11 7h2l3.2 9zM20 8.69V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12zm-9.15 3.96h2.3L12 9z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Dark mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Dark mode" for="__palette_2" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Automatic mode"  type="radio" name="__palette" id="__palette_2">
+    
+      <label class="md-header__button md-icon" title="Automatic mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog" aria-label="Search">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/Hemi131/Pierside" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Hemi131/Pierside
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href=".." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../install-and-update/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Install
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../remote-engines/" class="md-tabs__link">
+          
+  
+  
+  Documentation
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../changelog/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Changelog
+
+      </a>
+    </li>
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Pierside" class="md-nav__button md-logo" aria-label="Pierside" data-md-component="logo">
+      
+  <img src="../assets/icon.svg" alt="logo">
+
+    </a>
+    Pierside
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/Hemi131/Pierside" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Hemi131/Pierside
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../install-and-update/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Documentation
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Documentation
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../remote-engines/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Remote engines over SSH
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../what-works-where/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    What works where
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../compose/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Compose projects
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ports/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Ports and forwarding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../files-and-volumes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Files, volumes and the editor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    AI access (MCP server)
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    AI access (MCP server)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#create-a-connection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Create a connection
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-the-assistant-gets-in" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How the assistant gets in
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="How the assistant gets in">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#you-allow-it-in-pierside-the-default" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        You allow it in Pierside (the default)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#access-token" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Access token
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#permissions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Permissions
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Permissions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#shared-containers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Shared containers
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#files" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Files
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-whole-engine" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The whole engine
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#allow-everything" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Allow everything
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#compose-on-the-local-engine" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Compose on the local engine
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#asking-for-more" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Asking for more
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scripts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scripts
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-the-assistant-cant-do" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What the assistant can't do
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-is-never-shared" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What is never shared
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#things-to-keep-in-mind" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Things to keep in mind
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#manage-connections" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Manage connections
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#requirements-and-limits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Requirements and limits
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#structured-results" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Structured results
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../alerts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Alerts and notifications
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../building/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Building from source
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../changelog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Changelog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#create-a-connection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Create a connection
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-the-assistant-gets-in" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How the assistant gets in
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="How the assistant gets in">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#you-allow-it-in-pierside-the-default" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        You allow it in Pierside (the default)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#access-token" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Access token
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#permissions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Permissions
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Permissions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#shared-containers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Shared containers
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#files" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Files
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-whole-engine" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The whole engine
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#allow-everything" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Allow everything
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#compose-on-the-local-engine" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Compose on the local engine
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#asking-for-more" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Asking for more
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scripts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scripts
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-the-assistant-cant-do" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What the assistant can't do
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-is-never-shared" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What is never shared
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#things-to-keep-in-mind" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Things to keep in mind
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#manage-connections" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Manage connections
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#requirements-and-limits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Requirements and limits
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#structured-results" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Structured results
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+
+<h1 id="ai-access-mcp-server">AI access (MCP server)<a class="headerlink" href="#ai-access-mcp-server" title="Permanent link">&para;</a></h1>
+<p>Pierside can let an AI assistant such as Claude Code work with your Docker engines, with limits you set: from reading the logs of one project up to nearly everything Pierside's own window can do. It does this through a built-in <a href="https://modelcontextprotocol.io/">MCP</a> server: the assistant gets a fixed set of tools, never Docker itself, and Pierside checks every call against the permissions of the connection it came from.</p>
+<p>Nothing is shared until you create a connection.</p>
+<h2 id="create-a-connection">Create a connection<a class="headerlink" href="#create-a-connection" title="Permanent link">&para;</a></h2>
+<ol>
+<li>Open <strong>AI access</strong> at the bottom of the sidebar and choose <strong>New connection</strong>.</li>
+<li>Give it a name and choose <strong>which engines</strong> it may use: the local one, SSH engines, or all of them. The first one ticked is the default; the assistant can list the engines and name another one in each call.</li>
+<li>Choose <strong>which containers</strong> it covers: all of them, or tick them in the list. Ticking a Compose project covers its containers, including ones it gets later. Below the list you can add name patterns for containers or projects that don't exist yet: <code>*</code> matches any text, so <code>shop-*</code> covers <code>shop-web</code> and <code>shop-db</code>.</li>
+<li>Tick <strong>what the assistant may do</strong> (see below).</li>
+<li>Choose <strong>how the assistant gets in</strong> (see the next section) and create it.</li>
+<li>In the dialog that opens, choose <strong>Add to Claude Code</strong> or <strong>Add to Devin CLI</strong>. The dialog shows the command the button runs; where there is no button (see below), run that command in a terminal yourself.</li>
+</ol>
+<p>The <strong>Add to …</strong> button runs the command shown in the dialog for you (<code>claude mcp add …</code> or <code>devin mcp add …</code>) and replaces an older entry of the same name. With <strong>Available in all my projects</strong> switched off, choose the project folder first: the command then runs in that folder and the assistant has the access only there. The entry stays in your own assistant settings; nothing is written into the folder. It appears when Pierside runs inside Rancher Desktop and finds the assistant installed for your user; a running Claude Code session picks the new server up with <code>/mcp</code> or at its next start. Removing a connection in Pierside also removes it from the assistants that have it under that name.</p>
+<p>For Claude Code the command looks like this:</p>
+<div class="highlight"><pre><span></span><code>claude<span class="w"> </span>mcp<span class="w"> </span>add<span class="w"> </span>--scope<span class="w"> </span>user<span class="w"> </span>pierside-webshop<span class="w"> </span>--<span class="w"> </span>docker<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>-i<span class="w"> </span>&lt;pierside<span class="w"> </span>container&gt;<span class="w"> </span>python<span class="w"> </span>-m<span class="w"> </span>app.mcp_stdio<span class="w"> </span>--profile<span class="w"> </span>1a2b3c4d5e6f
+</code></pre></div>
+<p>With <code>--scope user</code> Claude Code has the access in all your projects. Without <strong>Available in all my projects</strong> the command has no such flag and registers the access only for the project folder it is run in. In Claude Code, <code>/mcp</code> shows whether it is connected.</p>
+<p>The dialog's <strong>Devin CLI</strong> tab has the same command for Devin's command-line tool:</p>
+<div class="highlight"><pre><span></span><code>devin<span class="w"> </span>mcp<span class="w"> </span>add<span class="w"> </span>-s<span class="w"> </span>user<span class="w"> </span>pierside-webshop<span class="w"> </span>--<span class="w"> </span>docker<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>-i<span class="w"> </span>&lt;pierside<span class="w"> </span>container&gt;<span class="w"> </span>python<span class="w"> </span>-m<span class="w"> </span>app.mcp_stdio<span class="w"> </span>--profile<span class="w"> </span>1a2b3c4d5e6f
+</code></pre></div>
+<p><code>-s user</code> plays the role of <code>--scope user</code>; without it Devin registers the access only for the project folder you run it in. <code>devin mcp list</code> shows the servers it knows.</p>
+<p>The last tab has the same thing as JSON for other MCP clients.</p>
+<h2 id="how-the-assistant-gets-in">How the assistant gets in<a class="headerlink" href="#how-the-assistant-gets-in" title="Permanent link">&para;</a></h2>
+<h3 id="you-allow-it-in-pierside-the-default">You allow it in Pierside (the default)<a class="headerlink" href="#you-allow-it-in-pierside-the-default" title="Permanent link">&para;</a></h3>
+<p>The command contains no secret. The first time the assistant uses a tool, Pierside shows a question with a four-letter code. That first tool call comes back after a few seconds so that the assistant can tell you the same code in its reply; compare the two, then answer:</p>
+<ul>
+<li><strong>Allow this session</strong>: until that assistant session ends. The next session asks again.</li>
+<li><strong>Allow longer</strong>: for 24 hours, 7 days, 30 days, or always. During that time no question is asked.</li>
+<li><strong>Deny</strong>.</li>
+</ul>
+<p>After you allow it, the assistant calls the tool again. The question stays open in Pierside for ten minutes, so a late answer still counts.</p>
+<p>You can also set the trust period in the connection's settings, and withdraw it at any time with <strong>stop trusting</strong> on the AI access page. Sessions that are running are then asked again.</p>
+<p>If the connection may change things, Pierside can also ask before <strong>each</strong> such action and shows exactly what the assistant is about to do. <strong>Ask before each action</strong> in the connection's settings has three choices:</p>
+<ul>
+<li><strong>Every action that changes something</strong> (the default),</li>
+<li><strong>Only deleting, overwriting and running commands</strong> (starting a container with a folder of the host mounted counts as this too, since it can change files on your machine),</li>
+<li><strong>Never</strong>.</li>
+</ul>
+<p>"Always trust" together with "Never" means the assistant is not held up by any question.</p>
+<p>Keep in mind what trust means: while a connection is trusted, any program on your computer that can run Docker can use it without asking. That program could already do more with Docker directly, so this is a convenience trade-off, not a new hole.</p>
+<h3 id="access-token">Access token<a class="headerlink" href="#access-token" title="Permanent link">&para;</a></h3>
+<p>For assistants that run unattended and can't wait for a click. The command then carries a token (<code>-e PIERSIDE_MCP_TOKEN=pmcp_…</code>), shown only once; Pierside stores only a hash of it. It works without asking you, until you make a new token with the key button or remove the connection. Don't commit a configuration file that contains it.</p>
+<h2 id="permissions">Permissions<a class="headerlink" href="#permissions" title="Permanent link">&para;</a></h2>
+<p>The assistant is only offered the tools you allowed. It can always list the engines of the connection, the shared containers and their Compose projects, and it can ask what the connection allows (its permissions, file paths and limits), so it doesn't have to find out by trial and error.</p>
+<p>The engine list also names the engines the connection may not use, marked as without permission, so the assistant can ask you for one (see <a href="#asking-for-more">Asking for more</a>). It sees only their names: Pierside doesn't connect to them for the assistant or show their addresses until you allow them.</p>
+<h3 id="shared-containers">Shared containers<a class="headerlink" href="#shared-containers" title="Permanent link">&para;</a></h3>
+<p>These apply to the containers chosen under <strong>Which containers</strong>.</p>
+<table>
+<thead>
+<tr>
+<th>Permission</th>
+<th>What the assistant can do</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Read logs</strong></td>
+<td>Recent log lines of a container or a whole Compose project, filtered by text, by the last N minutes, or by a time window in the past. See the limits below.</td>
+</tr>
+<tr>
+<td><strong>See configuration and state</strong></td>
+<td>Image, command, ports, networks, mounts, labels, restart policy; live CPU and memory use, running processes, health check results, files changed since start, the equivalent <code>docker run</code> command. Environment variables show only their names unless you tick the option to show values.</td>
+</tr>
+<tr>
+<td><strong>Start, stop, restart</strong></td>
+<td>Also pause, resume and kill; single containers and whole Compose projects</td>
+</tr>
+<tr>
+<td><strong>Create, rename, delete</strong></td>
+<td>Run a new container from an image (name, ports, environment, volumes, restart policy, network); recreate a container with the same settings, for example to pick up a newer image; rename and delete containers</td>
+</tr>
+<tr>
+<td><strong>Compose up and down</strong></td>
+<td>Read a project's Compose files and its resolved configuration, bring the project up (also after a change, or when it is down) and take it down. <strong>SSH engines only</strong>, see below.</td>
+</tr>
+<tr>
+<td><strong>Run commands</strong></td>
+<td>Any shell command inside the containers, optionally as a given user and in a given folder, with a time limit of up to two minutes. A command that runs past its limit, or prints far more than can be read (over 800,000 bytes), is stopped together with the processes it started, also those it sent into the background (for example <code>(tail -f log &amp;)</code>). Only a program that detached itself completely with <code>setsid</code> keeps running. A command that ends normally leaves its background programs running, as <code>docker exec</code> does.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Log limits.</strong> A request returns the newest 200 lines unless the assistant asks for more, and never more than the connection's <strong>Most log lines per request</strong> (500 unless you change it, at most 5000). A text filter searches only that many newest lines of the requested time window, not the whole log. "Allow everything" connections use the maximum, 5000. When the assistant asks for more lines than the connection allows, the answer says so. Every answer is kept to about 60,000 characters, so that an assistant such as Claude Code shows it directly (see below for how longer results continue).</p>
+<p>A new or renamed container must have a name the connection covers. New containers can't mount the Docker socket, system folders of the host such as <code>/etc</code>, <code>/usr</code> or <code>/var/lib/docker</code> (or a folder that contains one, such as <code>/var</code>), or the volumes of Pierside and other extensions. A host path with a symbolic link in it is refused too, and so is a path inside a folder that a container the assistant can reach mounts writable: otherwise the assistant could make a link there that leads to a system folder. Mounting a volume that already exists also needs <strong>See volumes</strong>. They can't use the host's network or share another container's (<code>container:…</code>). They can join any network the connection may see, including a macvlan or ipvlan network if the engine has one: that puts the container on your local network (not into the host's own).</p>
+<p><strong>Allow mounting host system folders</strong> lifts the mount rule. It appears only under <strong>Allow everything</strong> and is off unless you switch it on. With it, the assistant can start a container with the Docker socket or <code>/var/lib/docker</code> mounted, which is full control of the engine's machine: it reaches everything that is otherwise kept back, including Pierside's own data with your saved SSH keys and passwords. Use it only on an engine where that is acceptable.</p>
+<h3 id="files">Files<a class="headerlink" href="#files" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Permission</th>
+<th>What the assistant can do</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Read files</strong></td>
+<td>List folders, read text files up to 1 MB, and search file contents, only under the paths you list</td>
+</tr>
+<tr>
+<td><strong>Change files</strong></td>
+<td>Write or replace text files up to 1 MB, create folders, delete, change permissions, under the same paths</td>
+</tr>
+</tbody>
+</table>
+<p>List one path pattern per line. <code>*</code> matches within one folder, <code>**</code> also across folders:</p>
+<ul>
+<li><code>/etc/nginx/**</code> allows everything under <code>/etc/nginx</code></li>
+<li><code>/app/config/*.yaml</code> allows the YAML files directly in <code>/app/config</code></li>
+</ul>
+<p>Nothing is reachable until you add a path. A path that goes through a symbolic link is refused, so a link inside an allowed folder can't be used to reach something outside it. In a running container this holds also when a process in it replaces a folder with a link just as the assistant reads, lists or searches it, as long as the container has <code>sh</code> and <code>cat</code> (without them Pierside reads through Docker, which doesn't notice such a swap). Swapping the file itself, rather than a folder, is caught only where the container also has <code>/proc</code> and <code>readlink</code>, and not during a search. Reading and listing run as root in the container (a search runs as the container's own user); in a container that takes away root's access to other users' files (for example <code>--cap-drop ALL</code>), they run again as the container's own user, so its own files can still be read and listed. A search looks only into files the patterns allow, also below the folder it starts in; it stops after 30 seconds and never reads <code>/proc</code>, <code>/sys</code> or <code>/dev</code>.</p>
+<p>Changing files in a running container is protected the same way: writing, creating a folder, deleting and changing permissions act only in the folder that was checked, also when a process in the container replaces it (or a folder inside it, while a whole folder is deleted or changed) with a link at that moment. What changed that way is left as it is and named in the answer. This needs <code>sh</code>, and for writing also <code>head</code>, in the container.</p>
+<ul>
+<li>An existing file is written in place, so it keeps its owner, permissions and hard links. New files and folders belong to the container's own user. Writing runs as that user first and as root where the user isn't allowed to.</li>
+<li>Deleting and changing permissions run as the container's own user, as before. A recursive permission change leaves symbolic links and special files (FIFOs, sockets, devices) as they are, and a file it can't open is left as it is too.</li>
+<li>A stopped container is written through Docker. Nothing in it can swap a folder then.</li>
+<li>A running container without <code>sh</code> (a distroless image, for example) can't be written to unless you tick <strong>Also write to running containers that have no shell</strong> under <strong>Change files</strong>. Pierside then writes through Docker, which doesn't notice a swapped folder. This switch is off by default, also with <strong>Allow everything</strong>.</li>
+</ul>
+<h3 id="the-whole-engine">The whole engine<a class="headerlink" href="#the-whole-engine" title="Permanent link">&para;</a></h3>
+<p>These are not limited to the shared containers.</p>
+<table>
+<thead>
+<tr>
+<th>Permission</th>
+<th>What the assistant can do</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>See images</strong></td>
+<td>List images, their details and layers</td>
+</tr>
+<tr>
+<td><strong>Pull images</strong></td>
+<td>Download an image to the engine</td>
+</tr>
+<tr>
+<td><strong>See volumes</strong></td>
+<td>List volumes and their details. Reading files in a volume also needs <strong>Read files</strong>, and its paths apply inside the volume.</td>
+</tr>
+<tr>
+<td><strong>See networks</strong></td>
+<td>List networks and what is attached</td>
+</tr>
+<tr>
+<td><strong>Connect networks</strong></td>
+<td>Connect a shared container to a network, or disconnect it</td>
+</tr>
+<tr>
+<td><strong>See ports</strong></td>
+<td>Published and exposed ports of the shared containers, and Pierside's port forwards</td>
+</tr>
+<tr>
+<td><strong>Forward ports</strong></td>
+<td>Make a shared container's port reachable at <code>localhost</code> on your computer, and remove such forwards. A forward follows a renamed container and ends when its container is deleted (on an SSH engine within a minute); until then the assistant sees it marked and can remove it</td>
+</tr>
+<tr>
+<td><strong>Engine info</strong></td>
+<td>Docker version, CPUs and memory, disk usage, and recent engine events such as crashes and out-of-memory kills</td>
+</tr>
+<tr>
+<td><strong>See Swarm</strong></td>
+<td>Nodes, stacks, services and their tasks, service logs, and the names (never the contents) of secrets and configs</td>
+</tr>
+<tr>
+<td><strong>Change Swarm services</strong></td>
+<td>Create, scale, restart, change the image, roll back and remove services; remove a stack. Deploying a stack from a Compose file is not available.</td>
+</tr>
+<tr>
+<td><strong>Create volumes and networks</strong></td>
+<td>New named volumes and networks</td>
+</tr>
+<tr>
+<td><strong>Delete and clean up</strong></td>
+<td>Delete images, volumes and networks, and prune what is unused: stopped shared containers, images, volumes, networks, build cache. A preview shows what a prune would delete without deleting anything.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="allow-everything">Allow everything<a class="headerlink" href="#allow-everything" title="Permanent link">&para;</a></h3>
+<p>One switch at the top of the dialog: every container, every permission above, all file paths, and environment values visible, on the engines you choose under <strong>Which engines</strong>. Pick a single engine there to give full access to that one only, or <strong>All engines</strong>. The connection is marked in red on the AI access page. How the assistant gets in, and whether it asks before each action, are still your choice.</p>
+<h3 id="compose-on-the-local-engine">Compose on the local engine<a class="headerlink" href="#compose-on-the-local-engine" title="Permanent link">&para;</a></h3>
+<p>Compose up, down and reading Compose files work on SSH engines, where Pierside runs <code>docker compose</code> on the server. On the local engine Compose runs through Rancher Desktop's window, which a connection can't use. There the assistant can start, stop and restart a project's existing containers and recreate single containers, and it is told where the Compose files are on your computer so it can read them from disk itself.</p>
+<h3 id="asking-for-more">Asking for more<a class="headerlink" href="#asking-for-more" title="Permanent link">&para;</a></h3>
+<p>When the assistant needs something its connection doesn't allow, it can ask you instead of stopping. Pierside shows what it asks for (a permission, a container or Compose project, a file path, an engine, or the values of environment variables) with the assistant's reason, and you answer:</p>
+<ul>
+<li><strong>Allow this session</strong>: that assistant session has it until it ends, or until you edit the connection (Pierside then tells you how many sessions lost such access, and the assistant can ask again); the connection itself doesn't change.</li>
+<li><strong>Add to connection</strong>: it becomes part of the connection, as if you had ticked it in the dialog.</li>
+<li><strong>Deny</strong>: refused; the assistant may ask for something else.</li>
+<li><strong>Deny, pause 2 min</strong>: refused, and that assistant session can't ask for more access for two minutes.</li>
+</ul>
+<p>Decide by the list of what would be allowed. The reason is written by the assistant, and text in a log or a file can talk an assistant into asking. The request waits in Pierside for ten minutes. A new request's allow buttons react only after a moment, so a click meant for the previous question doesn't answer it, and after you answer, a message says what you decided. Pierside's own, extension and Kubernetes containers never match a request, even an allowed one.</p>
+<p>The assistant can't ask for <strong>Allow everything</strong>, for mounting host system folders, or to change how it is trusted or when it is asked; those you set yourself. Asking is available for connections you allow in Pierside, not for access tokens, and you can switch it off per connection with <strong>The assistant may ask for more access</strong>.</p>
+<h3 id="scripts">Scripts<a class="headerlink" href="#scripts" title="Permanent link">&para;</a></h3>
+<p>With <strong>Run scripts</strong> the assistant can send a short Python script instead of calling the tools one by one, for example "read the last 200 log lines of every running container and count the errors". The script calls the same tools, and only what it prints goes back to the assistant, so big jobs take one step and the assistant reads far less.</p>
+<p>A script can't do more than the assistant could do call by call. It can use only the permissions, containers, engines and paths of the connection. Every call it makes is checked like a direct one and is listed under <strong>Recent activity</strong>, folded under the script. It runs in a sandbox of its own that is removed afterwards: a container on this computer's engine (also for connections that use only SSH engines), made from Pierside's own image, with no network, no access to Docker or your files, a read-only file system, one CPU and 256 MB. It can make at most 500 tool calls and run for at most 2 minutes (a script whose changes you see as a list first runs twice, at most 1 minute 50 seconds each). Time spent waiting for your answers doesn't count toward that, but everything together, waiting included, ends after 4½ minutes. Permissions you take away from the connection apply to the script's next call. Switching the connection off, removing it, giving it a new token, or taking away <strong>Run scripts</strong> stops the script. If the time runs out while a change is being made, the change isn't cut off halfway: it finishes, and <strong>Recent activity</strong> shows how it ended.</p>
+<p>For connections you allow in Pierside, two settings appear once <strong>Run scripts</strong> is ticked:</p>
+<ul>
+<li><strong>Show me each script before it runs</strong> (on by default): you see the whole script and run or refuse it.</li>
+<li><strong>Changes a script makes</strong>, for the changes that <strong>Ask before each action</strong> would ask about:<ul>
+<li><strong>Show me the list of changes first</strong> (the default): the script first runs without changing anything. Pierside shows you every change it would make, and once you allow the list, it runs again and may make only those changes, each once and exactly as listed, on the containers the names meant when you allowed the list (if a name has come to mean another container in between, for example after a rename, that change isn't made). If it tries anything else, it is stopped, and the assistant is told which allowed changes were made and which weren't. Changes the setting doesn't ask about are listed as well, apart from the others, and made in the second run; they too are the only ones it may make. A script that changes nothing runs only once.</li>
+<li><strong>Ask at the first change of each kind</strong>: you can allow, for example, all "delete volume" calls of that script at once.</li>
+<li><strong>Ask before each change</strong>: like the assistant's direct calls.</li>
+</ul>
+</li>
+</ul>
+<p>Connections with an access token are never asked, for scripts either.</p>
+<p>While a script runs, the assistant's other calls wait for it. Claude Code moves a call that takes longer than two minutes to the background.</p>
+<h3 id="what-the-assistant-cant-do">What the assistant can't do<a class="headerlink" href="#what-the-assistant-cant-do" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Add or remove engines.</li>
+<li>Run commands on a server itself, outside containers. (Compose on an SSH engine is the one exception, and only for the projects the connection covers.)</li>
+<li>Read the contents of Swarm secrets.</li>
+</ul>
+<h2 id="what-is-never-shared">What is never shared<a class="headerlink" href="#what-is-never-shared" title="Permanent link">&para;</a></h2>
+<p>Not even with "Allow everything":</p>
+<ul>
+<li>Containers, volumes and networks that belong to Pierside itself, to other Rancher Desktop extensions, or to Kubernetes. Pierside's container holds the Docker socket and your saved SSH credentials.</li>
+<li>Containers a connection doesn't cover. To the assistant they look the same as containers that don't exist.</li>
+</ul>
+<h2 id="things-to-keep-in-mind">Things to keep in mind<a class="headerlink" href="#things-to-keep-in-mind" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Logs and files can contain secrets.</strong> Passwords printed at start-up, tokens in config files and the values of environment variables go to the assistant, and so to the AI provider, if you allow them. Share narrowly.</li>
+<li><strong>Image details can contain secrets too.</strong> With environment values hidden, the build history still shows <code>RUN</code> lines as they were written; a secret typed directly into a Dockerfile command is visible there.</li>
+<li><strong>Run commands removes the other limits</strong> for the containers it covers: a command can read any file, including those outside the allowed paths, read the values of environment variables even when they are hidden, and change anything inside them. Pierside asks about it with that warning. Leave it off unless you need it.</li>
+<li><strong>The engine-wide permissions show more than the shared containers.</strong> <strong>See images</strong> and <strong>See networks</strong> list everything of that kind on the engine. <strong>See volumes</strong> lists the volumes that are unused or used only by shared containers (all volumes when the connection shares all containers): a volume holds the data of the containers using it. Lists of a network's or volume's containers name only shared ones. <strong>Engine info</strong> gives totals for the whole engine, but names only what the connection can see anyway: its own containers in engine events and in the largest items of disk usage, and images, volumes and networks only with the permission for them.</li>
+<li><strong>Container output is untrusted text.</strong> A container can print something that reads like instructions. Read-only connections limit what such text could cause.</li>
+<li>A connection that uses an access token keeps that token in the assistant's configuration in plain text. Prefer the approval mode unless the assistant must run unattended.</li>
+</ul>
+<h2 id="manage-connections">Manage connections<a class="headerlink" href="#manage-connections" title="Permanent link">&para;</a></h2>
+<p>On the <strong>AI access</strong> page each connection has:</p>
+<ul>
+<li>a switch to turn it off and on without removing it,</li>
+<li>a button that shows the connection command again (or, for token connections, a key button that creates a new token and makes the old one stop working at once),</li>
+<li>how it is trusted right now, with <strong>stop trusting</strong> where that applies,</li>
+<li>edit and remove.</li>
+</ul>
+<p>Changes apply to the next call; the assistant doesn't need to reconnect, except after a new token. When a change adds or removes tools, Pierside tells the assistant that its tool list changed (within half a minute); Claude Code then reloads it by itself.</p>
+<p><strong>Recent activity</strong> lists the latest calls: which connection, which tool, which container or file, and whether it was allowed. Refused calls, including ones you denied or didn't answer, are marked. The list is kept in memory and starts empty when Pierside restarts.</p>
+<h2 id="requirements-and-limits">Requirements and limits<a class="headerlink" href="#requirements-and-limits" title="Permanent link">&para;</a></h2>
+<ul>
+<li>The assistant reaches Pierside through <code>docker exec</code>, so it needs the <code>docker</code> command on your computer, and Rancher Desktop and Pierside must be running.</li>
+<li>The connection keeps working when Pierside is updated. It stops if you install Pierside from a different image name (for example a build of your own), because the container name in the command changes; copy the command again with the key button.</li>
+<li>Connections are stored in Pierside's data volume and survive updates.</li>
+<li>Each answer is kept to a size an assistant can read. When a result is longer (many log lines, a big folder, long command output), Pierside leaves out whole lines or entries and says what it left out and how to get the rest: for example the next page of a folder listing, or the next lines of a file. A single line that is longer than a whole answer (a minified file, for example) is shortened, and the result says so. Some outputs are kept to their end by design: the latest output of each health check (800 characters) and Compose's output after up or down (about 6,000 characters).</li>
+</ul>
+<h2 id="structured-results">Structured results<a class="headerlink" href="#structured-results" title="Permanent link">&para;</a></h2>
+<p>Every tool also returns its result as structured data (MCP <code>structuredContent</code>, described by each tool's output schema), for clients and programs that work with data rather than text. Add <code>--structured</code> at the end of the connection command to get it. It is off by default, because some clients, Claude Code among them, then show the assistant the data instead of the text, which is longer and reads worse.</p>
+
+
+
+
+
+
+
+  
+  
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../files-and-volumes/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Files, volumes and the editor">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Files, volumes and the editor
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../alerts/" class="md-footer__link md-footer__link--next" aria-label="Next: Alerts and notifications">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Alerts and notifications
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  <div class="md-copyright__highlight">
+    Pierside · <a href="https://github.com/Hemi131/Pierside/blob/main/LICENSE">Apache-2.0</a> ·
+    <a href="../privacy/">Privacy and credits</a>
+  </div>
+  Not affiliated with Docker, Inc., SUSE, Anthropic or Cognition. Docker, Rancher Desktop, Claude, Claude Code,
+  Devin and other names are trademarks of their respective owners.
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://github.com/Hemi131/Pierside" target="_blank" rel="noopener" title="github.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://hub.docker.com/r/hemi131/pierside" target="_blank" rel="noopener" title="hub.docker.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M349.9 236.3h-66.1v-59.4h66.1zm0-204.3h-66.1v60.7h66.1zm78.2 144.8H362v59.4h66.1zm-156.3-72.1h-66.1v60.1h66.1zm78.1 0h-66.1v60.1h66.1zm276.8 100c-14.4-9.7-47.6-13.2-73.1-8.4-3.3-24-16.7-44.9-41.1-63.7l-14-9.3-9.3 14c-18.4 27.8-23.4 73.6-3.7 103.8-8.7 4.7-25.8 11.1-48.4 10.7H2.4c-8.7 50.8 5.8 116.8 44 162.1 37.1 43.9 92.7 66.2 165.4 66.2 157.4 0 273.9-72.5 328.4-204.2 21.4.4 67.6.1 91.3-45.2 1.5-2.5 6.6-13.2 8.5-17.1zm-511.1-27.9h-66v59.4h66.1v-59.4zm78.1 0h-66.1v59.4h66.1zm78.1 0h-66.1v59.4h66.1zm-78.1-72.1h-66.1v60.1h66.1z"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.footer", "search.highlight", "content.code.copy", "toc.follow"], "search": "../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.a5f9d56c.min.js"></script>
+      
+    
+  </body>
+</html>

@@ -1,0 +1,26 @@
+/* Pierside colours (the extension's own theme). Inlined into every page by main.html (not a
+   separate file: one render-blocking request less). */
+:root, [data-md-color-scheme="default"] {
+  --md-primary-fg-color: #0a63ed;
+  --md-primary-fg-color--light: #3d8bff;
+  --md-primary-fg-color--dark: #084fbd;
+  --md-accent-fg-color: #0a63ed;
+}
+[data-md-color-scheme="slate"] {
+  --md-primary-fg-color: #1b1f24;
+  --md-primary-fg-color--light: #22272e;
+  --md-primary-fg-color--dark: #14171b;
+  --md-accent-fg-color: #58a6ff;
+  --md-default-bg-color: #1b1f24;
+  --md-typeset-a-color: #58a6ff;
+}
+/* The footer's small print: the theme's 45 % white is below 4.5:1 on its footer (Lighthouse). */
+.md-footer {
+  --md-footer-fg-color--light: #ffffffd9;
+  --md-footer-fg-color--lighter: #ffffffb3;
+}
+/* The header's tabs and repository facts: the theme dims them to 70 / 75 % white, 3.3:1 on our blue;
+   95 % is 4.9:1. The current tab, no longer set apart by brightness, is underlined. */
+.md-tabs__link { opacity: .95; }
+.md-tabs__item--active .md-tabs__link { text-decoration: underline 2px; text-underline-offset: .35em; }
+.md-source__facts { opacity: .95; }

@@ -1,0 +1,1723 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Free, open-source Docker Desktop-style UI for Rancher Desktop: containers, Compose and Swarm on your machine or on servers over SSH, with an MCP server for AI assistants.">
+      
+      
+      
+        <link rel="canonical" href="https://pierside.dev/">
+      
+      
+      
+        <link rel="next" href="install-and-update/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="assets/icon.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.2">
+    
+    <title>Pierside – Docker Desktop-style UI for Rancher Desktop and your servers over SSH</title>
+    
+      <link rel="stylesheet" href="assets/stylesheets/main.57a0d79d.min.css">
+      
+        
+        <link rel="stylesheet" href="assets/stylesheets/palette.fb2fffe2.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+    
+    
+    <script>__md_scope=new URL(".",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  
+  
+  <style>/* Pierside colours (the extension's own theme). Inlined into every page by main.html (not a
+   separate file: one render-blocking request less). */
+:root, [data-md-color-scheme="default"] {
+  --md-primary-fg-color: #0a63ed;
+  --md-primary-fg-color--light: #3d8bff;
+  --md-primary-fg-color--dark: #084fbd;
+  --md-accent-fg-color: #0a63ed;
+}
+[data-md-color-scheme="slate"] {
+  --md-primary-fg-color: #1b1f24;
+  --md-primary-fg-color--light: #22272e;
+  --md-primary-fg-color--dark: #14171b;
+  --md-accent-fg-color: #58a6ff;
+  --md-default-bg-color: #1b1f24;
+  --md-typeset-a-color: #58a6ff;
+}
+/* The footer's small print: the theme's 45 % white is below 4.5:1 on its footer (Lighthouse). */
+.md-footer {
+  --md-footer-fg-color--light: #ffffffd9;
+  --md-footer-fg-color--lighter: #ffffffb3;
+}
+/* The header's tabs and repository facts: the theme dims them to 70 / 75 % white, 3.3:1 on our blue;
+   95 % is 4.9:1. The current tab, no longer set apart by brightness, is underlined. */
+.md-tabs__link { opacity: .95; }
+.md-tabs__item--active .md-tabs__link { text-decoration: underline 2px; text-underline-offset: .35em; }
+.md-source__facts { opacity: .95; }</style>
+  <link rel="icon" type="image/png" sizes="48x48" href="assets/favicon-48.png">
+  <link rel="icon" type="image/png" sizes="96x96" href="assets/favicon-96.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="assets/favicon-192.png">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png"><meta property="og:type" content="website">
+  <meta property="og:site_name" content="Pierside">
+  <meta property="og:title" content="Pierside – Docker Desktop-style UI for Rancher Desktop and your servers over SSH">
+  <meta property="og:description" content="Free, open-source Docker Desktop-style UI for Rancher Desktop: containers, Compose and Swarm on your machine or on servers over SSH, with an MCP server for AI assistants.">
+  <meta property="og:url" content="https://pierside.dev/">
+  <meta property="og:image" content="https://pierside.dev/assets/social-card.png">
+  <meta property="og:image:width" content="1280">
+  <meta property="og:image:height" content="640">
+  <meta property="og:image:alt" content="Pierside: a Docker Desktop-style container UI for Rancher Desktop">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Pierside – Docker Desktop-style UI for Rancher Desktop and your servers over SSH">
+  <meta name="twitter:description" content="Free, open-source Docker Desktop-style UI for Rancher Desktop: containers, Compose and Swarm on your machine or on servers over SSH, with an MCP server for AI assistants.">
+  <meta name="twitter:image" content="https://pierside.dev/assets/social-card.png">
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "Pierside",
+    "url": "https://pierside.dev/",
+    "description": "Free, open-source Docker Desktop-style UI for Rancher Desktop: containers, Compose and Swarm on your machine or on servers over SSH, with an MCP server for AI assistants.",
+    "applicationCategory": "DeveloperApplication",
+    "applicationSubCategory": "Rancher Desktop extension",
+    "operatingSystem": "Windows, macOS, Linux",
+    "image": "https://pierside.dev/assets/social-card.png",
+    "screenshot": "https://pierside.dev/images/containers.webp",
+    "license": "https://www.apache.org/licenses/LICENSE-2.0",
+    "isAccessibleForFree": true,
+    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+    "downloadUrl": "https://github.com/Hemi131/Pierside/releases",
+    "sameAs": ["https://github.com/Hemi131/Pierside", "https://hub.docker.com/r/hemi131/pierside"]
+  }
+  </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "name": "Pierside",
+    "alternateName": "pierside.dev",
+    "url": "https://pierside.dev/"
+  }
+  </script>
+  <script>document.documentElement.classList.add("js")</script>
+  <style>/* Landing page. Colours follow Material's light (default) / dark (slate) scheme.
+   Inlined into the page by home.html (no render-blocking request); text colours need 4.5:1. */
+.ps-home {
+  --ps-bg: #ffffff;
+  --ps-bg-tint: #f4f6f9;
+  --ps-panel: #ffffff;
+  --ps-panel-2: #f6f8fa;
+  --ps-line: #e1e4e8;
+  --ps-text: #17202a;
+  --ps-muted: #56626e;
+  --ps-blue: #0a63ed;
+  --ps-blue-2: #3d8bff;
+  --ps-green: #1a7f37;
+  --ps-amber: #8a5d00;
+  --ps-red: #cf222e;
+  --ps-term-bg: #0d1117;
+  --ps-bg-servers: #eef4fc;
+  --ps-term-text: #e6edf3;
+  --ps-shadow: 0 1px 2px rgba(23, 32, 42, .06), 0 12px 32px rgba(23, 32, 42, .10);
+  color: var(--ps-text);
+  background: var(--ps-bg);
+  font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-size: 16px;
+  line-height: 1.55;
+  overflow-x: clip; /* not hidden: that would make the page a second scroll area */
+}
+[data-md-color-scheme="slate"] .ps-home {
+  --ps-bg: #1b1f24;
+  --ps-bg-tint: #20252b;
+  --ps-panel: #22272e;
+  --ps-panel-2: #1b1f24;
+  --ps-line: #353c45;
+  --ps-text: #e6edf3;
+  --ps-muted: #9aa7b4;
+  --ps-blue: #3d8bff;
+  --ps-blue-2: #79c0ff;
+  --ps-green: #3fb950;
+  --ps-amber: #d29922;
+  --ps-red: #f85149;
+  --ps-shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 16px 40px rgba(0, 0, 0, .35);
+  --ps-bg-servers: #171c24;
+}
+/* The landing page has no article: hide the empty main area, but not the navigation sidebar in it,
+   which is the burger menu's drawer on narrow screens. */
+body:has(.ps-home) .md-main, body:has(.ps-home) .md-main__inner { flex-grow: 0; height: 0; margin: 0; }
+body:has(.ps-home) .md-content { display: none; }
+
+.ps-home *, .ps-home *::before, .ps-home *::after { box-sizing: border-box; }
+.ps-home [hidden] { display: none !important; }
+.ps-home h1, .ps-home h2, .ps-home h3, .ps-home h4 { color: var(--ps-text); margin: 0; letter-spacing: -.02em; }
+.ps-home p { margin: 0; }
+.ps-home code { font-family: "Cascadia Mono", Consolas, "SFMono-Regular", Menlo, monospace; font-size: .88em; background: var(--ps-panel-2); border: 1px solid var(--ps-line); border-radius: 4px; padding: 0 .3em; }
+.ps-home svg { fill: currentColor; }
+.ps-wrap { max-width: 1180px; margin: 0 auto; padding: 0 24px; }
+.ps-nowrap { white-space: nowrap; }
+
+.ps-eyebrow { color: var(--ps-blue); font-weight: 600; font-size: .8rem; letter-spacing: .08em; text-transform: uppercase; margin-bottom: .6rem !important; }
+.ps-grad { background: linear-gradient(90deg, var(--ps-blue), #8b5cf6); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.ps-lead { font-size: 1.15rem; color: var(--ps-muted); margin-top: 1.1rem !important; max-width: 36em; }
+
+/* Buttons */
+.ps-btn { display: inline-flex; align-items: center; gap: .45em; padding: .62em 1.15em; border-radius: 8px; border: 1px solid var(--ps-line); background: var(--ps-panel); color: var(--ps-text) !important; font-weight: 600; font-size: .95rem; cursor: pointer; transition: transform .15s, box-shadow .15s, background .15s; text-decoration: none; }
+.ps-btn svg { width: 1.1em; height: 1.1em; }
+.ps-btn:hover { transform: translateY(-1px); box-shadow: var(--ps-shadow); }
+.ps-btn--primary { background: var(--ps-blue); border-color: var(--ps-blue); color: #fff !important; }
+.ps-btn--sm { padding: .35em .75em; font-size: .8rem; border-radius: 6px; }
+.ps-btn:disabled { opacity: .55; cursor: default; transform: none; box-shadow: none; }
+.ps-cta { display: flex; gap: .75rem; flex-wrap: wrap; margin-top: 1.8rem; }
+.ps-cta--center { justify-content: center; }
+.ps-more { display: inline-block; margin-top: 1.2rem; font-weight: 600; color: var(--ps-blue) !important; }
+
+/* Hero */
+.ps-hero { position: relative; padding: 72px 0 56px; background:
+  radial-gradient(800px 420px at 90% 10%, rgba(61, 139, 255, .16), transparent 70%),
+  radial-gradient(600px 380px at 0% 100%, rgba(139, 92, 246, .10), transparent 70%); }
+.ps-hero__grid { display: flex; flex-direction: column; align-items: center; gap: 56px; text-align: center; }
+.ps-hero__text { max-width: min(860px, 100%); display: flex; flex-direction: column; align-items: center; }
+.ps-hero .ps-lead { margin-left: auto; margin-right: auto; }
+.ps-hero .ps-cta { justify-content: center; }
+.ps-hero .ps-install { text-align: left; width: 100%; }
+.ps-hero__shot { width: 100%; max-width: 1080px; }
+.ps-hero h1 { font-size: clamp(2.2rem, 5vw, 3.8rem); line-height: 1.08; font-weight: 750; }
+.ps-hero__shot { perspective: 1600px; }
+.ps-hero__shot .ps-window { transform: rotateX(8deg); transform-origin: 50% 100%; transition: transform .8s ease; box-shadow: 0 30px 80px rgba(10, 99, 237, .22), var(--ps-shadow); }
+.ps-hero__shot.is-in .ps-window, .ps-hero__shot:hover .ps-window { transform: none; }
+
+.ps-install { margin-top: 1.6rem; max-width: 34rem; }
+.ps-install__tabs { display: flex; gap: 2px; }
+.ps-install__tabs button { border: 0; background: none; color: var(--ps-muted); font: inherit; font-size: .8rem; font-weight: 600; padding: .3em .8em; border-radius: 6px 6px 0 0; cursor: pointer; }
+.ps-install__tabs button[aria-selected="true"] { background: var(--ps-term-bg); color: #e6edf3; }
+.ps-install__cmd { display: flex; align-items: center; gap: .6em; background: var(--ps-term-bg); color: #79c0ff; border-radius: 0 8px 8px 8px; padding: .7em .6em .7em 1em; font-family: "Cascadia Mono", Consolas, Menlo, monospace; font-size: .85rem; }
+.ps-install__cmd code { background: none; border: 0; padding: 0; color: inherit; flex: 1; min-width: 0; overflow-x: auto; white-space: nowrap; }
+.ps-prompt { color: #8b949e; }
+.ps-copy { border: 0; background: none; color: #8b949e; cursor: pointer; padding: .2em; border-radius: 4px; display: flex; }
+.ps-copy:hover { color: #e6edf3; background: rgba(255, 255, 255, .08); }
+.ps-copy svg { width: 18px; height: 18px; }
+.ps-copy.is-done { color: #3fb950; }
+.ps-install__note { font-size: .8rem; color: var(--ps-muted); margin-top: .6rem !important; }
+
+/* Window frame */
+.ps-window { background: var(--ps-panel); border: 1px solid var(--ps-line); border-radius: 10px; overflow: hidden; box-shadow: var(--ps-shadow); }
+.ps-window img { display: block; width: 100%; height: auto; }
+.ps-window__bar { display: flex; align-items: center; gap: 6px; padding: 8px 12px; background: var(--ps-panel-2); border-bottom: 1px solid var(--ps-line); font-size: .75rem; color: var(--ps-muted); }
+.ps-window__bar i { width: 10px; height: 10px; border-radius: 50%; background: var(--ps-line); }
+.ps-window__bar span { margin-left: 8px; font-weight: 600; }
+
+/* Strip */
+.ps-strip { border-top: 1px solid var(--ps-line); border-bottom: 1px solid var(--ps-line); background: var(--ps-bg-tint); }
+.ps-strip__row { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px 28px; padding-top: 18px; padding-bottom: 18px; font-size: .9rem; color: var(--ps-muted); font-weight: 500; }
+.ps-strip__row span { display: inline-flex; align-items: center; gap: .5em; }
+.ps-strip__row svg { width: 20px; height: 20px; color: var(--ps-blue); }
+
+/* Sections */
+.ps-section { padding: 96px 0; }
+.ps-section--tint { background: var(--ps-bg-tint); }
+.ps-section h2 { font-size: clamp(1.7rem, 3vw, 2.4rem); line-height: 1.15; font-weight: 700; }
+.ps-section h3 { font-size: 1.4rem; font-weight: 650; }
+.ps-split__text > p:not(.ps-eyebrow) { color: var(--ps-muted); margin-top: 1rem !important; font-size: 1.05rem; }
+.ps-head { text-align: center; max-width: 42rem; margin: 0 auto 56px; }
+.ps-head > p:not(.ps-eyebrow) { color: var(--ps-muted); margin-top: 1rem !important; font-size: 1.05rem; }
+
+.ps-split { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); gap: 56px; align-items: center; }
+.ps-split--flip > :first-child { order: 2; }
+.ps-split--shot { grid-template-columns: minmax(0, .75fr) minmax(0, 1.25fr); margin-bottom: 72px; }
+.ps-split--shot:last-child { margin-bottom: 0; }
+.ps-split--shot.ps-split--flip { grid-template-columns: minmax(0, 1.25fr) minmax(0, .75fr); }
+
+.ps-checks { list-style: none; padding: 0; margin: 1.4rem 0 0; display: grid; gap: .7rem; }
+.ps-checks li { position: relative; padding-left: 1.8em; color: var(--ps-muted); margin: 0; }
+.ps-checks li b { color: var(--ps-text); }
+.ps-checks li::before { content: ""; position: absolute; left: 0; top: .3em; width: 1.1em; height: 1.1em; border-radius: 50%; background: var(--ps-blue) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='white' d='M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z'/%3E%3C/svg%3E") center / 75% no-repeat; }
+.ps-demo-hint { text-align: center; font-size: .8rem; color: var(--ps-muted); margin-top: .8rem !important; }
+
+/* ── Parts ── */
+.ps-part { padding: 104px 0 8px; }
+.ps-part__head { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 28px; align-items: start; }
+.ps-part__head > div { max-width: 46rem; }
+.ps-part__head > div > p:not(.ps-eyebrow) { color: var(--ps-muted); margin-top: 1rem !important; font-size: 1.1rem; }
+.ps-part__num { width: 64px; height: 64px; border-radius: 16px; display: flex; align-items: center; justify-content: center; font-size: 1.8rem; font-weight: 800; color: #fff; background: linear-gradient(135deg, var(--ps-blue), #8b5cf6); box-shadow: 0 10px 30px color-mix(in srgb, var(--ps-blue) 35%, transparent); }
+.ps-part--servers { background: linear-gradient(180deg, var(--ps-bg) 0%, var(--ps-bg-servers) 100%); }
+.ps-part--servers .ps-part__num { background: linear-gradient(135deg, #0f9d8a, var(--ps-blue)); }
+.ps-section--tight { padding-top: 64px; }
+.ps-section--servers { background: var(--ps-bg-servers); }
+
+/* A generic mock panel */
+.ps-mock { overflow-x: auto; background: var(--ps-panel); border: 1px solid var(--ps-line); border-radius: 10px; box-shadow: var(--ps-shadow); padding: 12px 14px; font-size: .8rem; }
+.ps-mock__bar { display: flex; align-items: center; gap: .5em; padding-bottom: 8px; margin-bottom: 4px; border-bottom: 1px solid var(--ps-line); }
+.ps-chip { font-size: .7rem; font-weight: 600; color: var(--ps-muted); border: 1px solid var(--ps-line); border-radius: 99px; padding: 0 .6em; }
+.ps-actions span { font-size: .72rem; font-weight: 600; color: var(--ps-blue); border: 1px solid color-mix(in srgb, var(--ps-blue) 40%, var(--ps-line)); border-radius: 6px; padding: .15em .55em; }
+.ps-warn-text { color: var(--ps-amber) !important; }
+.ps-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--ps-blue); display: inline-block; flex: none; }
+.ps-dot--amber { background: var(--ps-amber); }
+.ps-dot--red { background: var(--ps-red); }
+
+/* Engines at a glance */
+.ps-split--glance { grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); margin-bottom: 64px; }
+.ps-glance { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.ps-gcard { --c: var(--ps-blue); background: var(--ps-panel); border: 1px solid var(--ps-line); border-top: 3px solid var(--c); border-radius: 10px; padding: 12px 12px 10px; box-shadow: var(--ps-shadow); font-size: .78rem; display: grid; gap: 8px; }
+.ps-gcard--amber { --c: var(--ps-amber); }
+.ps-gcard--red { --c: var(--ps-red); box-shadow: var(--ps-shadow), 0 0 0 1px color-mix(in srgb, var(--ps-red) 40%, transparent); }
+.ps-gcard__head { display: grid; grid-template-columns: auto 1fr auto; column-gap: .5em; align-items: center; }
+.ps-gcard__head b { font-size: .9rem; }
+.ps-gcard__head small { grid-column: 2; color: var(--ps-muted); font-size: .7rem; }
+.ps-eye { grid-row: 1; grid-column: 3; color: var(--ps-blue); display: flex; }
+.ps-eye svg { width: 16px; height: 16px; }
+.ps-gcard__stat { display: flex; justify-content: space-between; color: var(--ps-muted); }
+.ps-gmeter { display: grid; grid-template-columns: 30px 1fr; align-items: center; gap: 6px; color: var(--ps-muted); font-size: .7rem; }
+.ps-gcard__ok, .ps-gcard__bad { display: flex; align-items: center; gap: .35em; font-weight: 600; font-size: .74rem; color: var(--ps-green); padding-top: 6px; border-top: 1px solid var(--ps-line); }
+.ps-gcard__bad { color: var(--ps-amber); }
+.ps-gcard__ok svg, .ps-gcard__bad svg { width: 15px; height: 15px; }
+
+/* Bento of server tiles */
+.ps-bento { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 18px; }
+.ps-tile { grid-column: span 2; display: flex; flex-direction: column; gap: 16px; background: var(--ps-bg); border: 1px solid var(--ps-line); border-radius: 16px; padding: 22px; }
+.ps-tile--perf { grid-column: span 4; }
+.ps-tile--disk { grid-column: span 2; }
+.ps-tile h3 { font-size: 1.15rem; display: flex; align-items: center; gap: .45em; }
+.ps-tile h3 svg { width: 22px; height: 22px; color: var(--ps-blue); }
+.ps-tile__text p { color: var(--ps-muted); font-size: .92rem; margin-top: .45rem !important; }
+.ps-tile__text p b { color: var(--ps-text); }
+
+.ps-disk__fs { display: grid; grid-template-columns: 16px 1fr auto; gap: 8px; align-items: center; font-weight: 600; margin-bottom: 10px; }
+.ps-bar--warn i { background: linear-gradient(90deg, var(--ps-amber), var(--ps-red)) !important; }
+.ps-disk__list { list-style: none; margin: 0 !important; padding: 0 !important; display: grid; gap: 7px; }
+.ps-disk__list li { display: grid; grid-template-columns: 76px 1fr 56px; align-items: center; gap: 8px; margin: 0 !important; }
+.ps-disk__list b { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+.ps-disk__list b.is-measuring { color: var(--ps-muted); font-weight: 400; font-size: .7rem; }
+
+.ps-root { margin-left: auto !important; color: #fff !important; background: var(--ps-red); border-radius: 99px; padding: 0 .55em; font-size: .68rem; }
+.ps-term--mini .ps-term__body { min-height: 150px; font-size: .74rem; padding: 10px 12px; }
+.ps-term__body .root { color: #ff7b72; }
+
+.ps-toasts { display: grid; gap: 8px; }
+.ps-toast { display: flex; gap: 10px; align-items: flex-start; background: var(--ps-panel); border: 1px solid var(--ps-line); border-radius: 10px; padding: 10px 12px; box-shadow: var(--ps-shadow); font-size: .8rem; }
+.ps-toast small { display: block; color: var(--ps-muted); font-size: .72rem; }
+.ps-toast__icon { width: 28px; height: 28px; border-radius: 8px; display: flex; align-items: center; justify-content: center; flex: none; }
+.ps-toast__icon svg { width: 17px; height: 17px; }
+.ps-toast__icon--red { color: var(--ps-red); background: color-mix(in srgb, var(--ps-red) 14%, transparent); }
+.ps-toast__icon--amber { color: var(--ps-amber); background: color-mix(in srgb, var(--ps-amber) 16%, transparent); }
+.ps-toast__btns { display: flex; gap: 8px; justify-content: flex-end; }
+.ps-toast__btns span { font-size: .72rem; font-weight: 600; color: var(--ps-blue); padding: .2em .6em; border-radius: 6px; border: 1px solid var(--ps-line); background: var(--ps-panel); }
+.js .ps-toasts > * { opacity: 0; transform: translateY(10px); transition: opacity .4s ease, transform .4s ease; }
+.js .ps-toasts.is-on > * { opacity: 1; transform: none; }
+.js .ps-toasts.is-on > :nth-child(2) { transition-delay: .6s; }
+.js .ps-toasts.is-on > :nth-child(3) { transition-delay: 1s; }
+
+.ps-also { list-style: none; padding: 0 !important; margin: 36px 0 0 !important; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; }
+.ps-also li { display: flex; gap: .6em; align-items: flex-start; color: var(--ps-muted); font-size: .9rem; margin: 0 !important; }
+.ps-also svg { width: 20px; height: 20px; color: var(--ps-blue); flex: none; margin-top: .1em; }
+
+.ps-table { width: 100%; border-collapse: collapse; font-size: .8rem; }
+.ps-table th { text-align: left; color: var(--ps-muted); font-weight: 600; padding: 6px 6px; border-bottom: 1px solid var(--ps-line); }
+.ps-table td { padding: 7px 6px; border-bottom: 1px solid var(--ps-line); white-space: nowrap; }
+.ps-table tr:last-child td { border-bottom: 0; }
+.ps-table td small { display: block; color: var(--ps-muted); font-size: .7rem; }
+.ps-table .is-project td { font-weight: 600; background: var(--ps-panel-2); }
+.ps-table .is-child td:nth-child(2) { padding-left: 22px; }
+.ps-status { display: inline-flex; align-items: center; gap: .4em; }
+.ps-status::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--ps-green); }
+.ps-status--exited::before { background: var(--ps-muted); }
+.ps-status--restarting::before { background: var(--ps-amber); animation: ps-blink 1s infinite; }
+
+.ps-meters { display: grid; gap: 8px; margin: 8px 0 6px; }
+.ps-meters > div { display: grid; grid-template-columns: 70px 1fr 44px; align-items: center; gap: 10px; }
+.ps-meters label { color: var(--ps-muted); font-weight: 600; }
+.ps-meters span { text-align: right; font-variant-numeric: tabular-nums; }
+.ps-bar { height: 8px; background: var(--ps-panel-2); border: 1px solid var(--ps-line); border-radius: 99px; overflow: hidden; }
+.ps-bar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--ps-blue), var(--ps-blue-2)); transition: width .8s ease; border-radius: 99px; }
+.ps-spark { width: 100%; height: 50px; margin: 2px 0 4px; }
+.ps-spark polyline { fill: none; stroke: var(--ps-blue); stroke-width: 1.6; vector-effect: non-scaling-stroke; }
+.ps-table--procs td:nth-child(3), .ps-table--procs td:nth-child(4) { font-variant-numeric: tabular-nums; }
+.ps-table--procs td:nth-child(2) { color: var(--ps-blue); }
+
+.ps-files { padding-top: 6px; }
+.ps-crumbs { color: var(--ps-muted); font-weight: 600; margin-bottom: 6px; }
+.ps-filelist { list-style: none; margin: 0 !important; padding: 0 !important; }
+.ps-filelist li { display: flex; align-items: center; gap: .5em; padding: 5px 6px; margin: 0 !important; border-radius: 4px; }
+.ps-filelist li svg { width: 16px; height: 16px; color: var(--ps-muted); }
+.ps-filelist li small { margin-left: auto; color: var(--ps-muted); font-family: "Cascadia Mono", Consolas, monospace; font-size: .7rem; }
+.ps-filelist li.is-open { background: color-mix(in srgb, var(--ps-blue) 14%, transparent); }
+.ps-code { margin: 8px 0 0 !important; background: var(--ps-term-bg); color: #c9d1d9; border-radius: 6px; padding: 10px 12px !important; font-size: .75rem; line-height: 1.5; overflow-x: auto; }
+.ps-code .k { color: #ff7b72; }
+.ps-code .n { color: #79c0ff; }
+.ps-files__note { display: block; margin-top: 8px !important; color: var(--ps-muted); font-size: .74rem; }
+.ps-files__note svg { width: 16px; height: 16px; vertical-align: -.25em; margin-right: .3em; color: var(--ps-amber); }
+
+/* ── AI mock ── */
+.ps-ai { position: relative; }
+.ps-term { background: var(--ps-term-bg); border-radius: 10px; overflow: hidden; box-shadow: var(--ps-shadow); border: 1px solid #30363d; }
+.ps-term .ps-window__bar { background: #161b22; border-color: #30363d; color: #8b949e; }
+.ps-term .ps-window__bar i { background: #30363d; }
+.ps-term__body { color: var(--ps-term-text); font-family: "Cascadia Mono", Consolas, Menlo, monospace; font-size: .78rem; line-height: 1.55; padding: 14px 16px 18px; min-height: 440px; }
+.ps-term__body p { margin: 0 0 .55em !important; animation: ps-fade .3s ease both; }
+.ps-term__body .u { color: #e6edf3; }
+.ps-term__body .u::before { content: "> "; color: #d2a8ff; }
+.ps-term__body .a { color: #c9d1d9; }
+.ps-term__body .a::before { content: "● "; color: #e6edf3; }
+.ps-term__body .t { color: #8b949e; }
+.ps-term__body .t::before { content: "⎿ "; }
+.ps-term__body .t b { color: #79c0ff; font-weight: 500; }
+.ps-term__body .ok { color: #3fb950; }
+.ps-term__body .warn { color: #d29922; }
+.ps-caret { display: inline-block; width: .55em; height: 1.05em; vertical-align: -.15em; background: #e6edf3; animation: ps-blink 1s steps(1) infinite; }
+.ps-ask { position: absolute; right: 16px; bottom: 16px; width: min(350px, calc(100% - 32px)); background: var(--ps-panel); color: var(--ps-text); border: 1px solid var(--ps-line); border-radius: 10px; box-shadow: var(--ps-shadow), 0 0 0 1px color-mix(in srgb, var(--ps-blue) 35%, transparent); padding: 14px 16px; font-size: .82rem; animation: ps-rise .35s ease both; z-index: 2; }
+.ps-ask__head { line-height: 1.4; }
+.ps-ask__head svg { vertical-align: -.2em; margin-right: .2em; }
+.ps-ask__head svg { width: 18px; height: 18px; color: var(--ps-blue); }
+.ps-ask__from { font-size: .68rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--ps-muted); margin-bottom: .45rem; display: flex; align-items: center; gap: .4em; }
+.ps-ask__from img { width: 14px; height: 14px; }
+.ps-ask p { color: var(--ps-muted); margin: .35rem 0 .7rem !important; }
+.ps-ask__btns { display: flex; flex-wrap: wrap; gap: 6px; }
+.ps-ask__btns .ps-btn--sm { padding: .3em .6em; font-size: .75rem; white-space: nowrap; }
+.ps-ask [data-ai-allow] { animation: ps-pulse 1.4s ease infinite; }
+.ps-code-pill { font-family: "Cascadia Mono", Consolas, monospace; font-weight: 700; color: var(--ps-text); background: var(--ps-bg-tint); border: 1px solid var(--ps-line); border-radius: 4px; padding: 0 .35em; letter-spacing: .1em; }
+.ps-replay { position: absolute; top: 5px; right: 10px; display: inline-flex; align-items: center; gap: .3em; font: inherit; font-size: .75rem; color: #8b949e; background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: .2em .6em; cursor: pointer; }
+.ps-replay svg { width: 14px; height: 14px; }
+.ps-replay:hover { color: #e6edf3; }
+
+/* ── Scripts: the race and the plan ── */
+.ps-scripts .ps-head { margin-bottom: 40px; }
+.ps-race { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; align-items: stretch; }
+.ps-race__side { position: relative; display: flex; }
+.ps-race .ps-term { display: flex; flex-direction: column; width: 100%; }
+.ps-race .ps-term__body { flex: 1; min-height: 430px; font-size: .74rem; }
+.ps-race .ps-term__body p { margin: 0 0 .3em !important; }
+.ps-race .ps-term__body .u, .ps-race .ps-term__body .a { margin-bottom: .6em !important; }
+.ps-race__meter { display: flex; justify-content: space-between; gap: 12px; padding: 10px 16px; border-top: 1px solid #30363d; background: #161b22; color: #8b949e; font-size: .8rem; font-variant-numeric: tabular-nums; }
+.ps-race__meter b { color: #e6edf3; font-weight: 650; }
+.ps-race__side--win .ps-race__meter b { color: #3fb950; }
+.ps-race__side--win .ps-term { border-color: color-mix(in srgb, #3fb950 45%, #30363d); }
+.ps-term__body .o { color: #e6edf3; padding-left: 1.4em; white-space: pre-wrap; }
+.ps-term__body .o.dim { color: #8b949e; }
+.ps-term__body pre.ps-script { margin: .1em 0 .6em 1.4em; padding: 8px 10px; border-radius: 6px; background: #161b22; border: 1px solid #30363d; color: #c9d1d9; font: inherit; line-height: 1.5; white-space: pre; overflow-x: auto; animation: ps-fade .3s ease both; }
+.ps-script .k { color: #ff7b72; }
+.ps-script .s { color: #a5d6ff; }
+.ps-script .f { color: #d2a8ff; }
+.ps-split--plan { margin-top: 104px; }
+.ps-split--plan .ps-term__body { min-height: 520px; }
+.ps-split__text > p.ps-fineprint { font-size: .9rem; margin-top: 1.3rem !important; }
+.ps-plan { list-style: none; margin: .6rem 0 .8rem !important; padding: 8px 10px !important; display: grid; gap: 3px; background: var(--ps-panel-2); border: 1px solid var(--ps-line); border-radius: 6px; font-family: "Cascadia Mono", Consolas, Menlo, monospace; font-size: .74rem; font-weight: 600; }
+.ps-plan li { margin: 0 !important; }
+.ps-plan li::before { content: "• "; color: var(--ps-muted); }
+.ps-ask--plan .ps-ask__btns { justify-content: flex-end; }
+.ps-ask [data-plan-allow] { animation: ps-pulse 1.4s ease infinite; }
+
+/* Grid */
+.ps-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+.ps-grid--4 { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-top: 24px; }
+.ps-grid--4 .ps-card { padding: 18px; }
+.ps-card { background: var(--ps-panel); border: 1px solid var(--ps-line); border-radius: 12px; padding: 22px; transition: transform .2s, box-shadow .2s, border-color .2s; }
+.ps-card:hover { transform: translateY(-3px); box-shadow: var(--ps-shadow); border-color: color-mix(in srgb, var(--ps-blue) 40%, var(--ps-line)); }
+.ps-card > svg { width: 30px; height: 30px; color: var(--ps-blue); padding: 6px; box-sizing: content-box; background: color-mix(in srgb, var(--ps-blue) 12%, transparent); border-radius: 8px; }
+.ps-card h4 { font-size: 1.05rem; font-weight: 650; margin-top: 14px; }
+.ps-card p { color: var(--ps-muted); font-size: .92rem; margin-top: .4rem !important; }
+
+/* Final */
+.ps-final__box { text-align: center; max-width: 720px; }
+.ps-final__box > img { margin: 0 auto 12px; display: block; }
+.ps-final__box > p { color: var(--ps-muted); margin-top: .8rem !important; font-size: 1.05rem; }
+.ps-fine { font-size: .75rem !important; margin-top: 2.5rem !important; }
+
+/* Short entrance: each section once, as it scrolls in. */
+.js .ps-reveal { opacity: 0; transform: translateY(18px); transition: opacity .6s ease, transform .6s ease; }
+.js .ps-reveal.is-in { opacity: 1; transform: none; }
+/* The hero screenshot is in view at once: never hidden until home.js runs (it would delay the first
+   paint of the page's largest image); only its window unfolds when .is-in arrives. */
+.js .ps-hero__shot.ps-reveal { opacity: 1; transform: none; }
+
+@keyframes ps-fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@keyframes ps-rise { from { opacity: 0; transform: translateY(14px) scale(.98); } to { opacity: 1; transform: none; } }
+@keyframes ps-pop { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+@keyframes ps-spin { to { transform: rotate(360deg); } }
+@keyframes ps-blink { 50% { opacity: .25; } }
+@keyframes ps-pulse { 0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--ps-blue) 50%, transparent); } 50% { box-shadow: 0 0 0 6px transparent; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .ps-home *, .ps-home *::before { animation: none !important; transition: none !important; }
+  .js .ps-reveal { opacity: 1; transform: none; }
+}
+
+@media (max-width: 960px) {
+  .ps-split, .ps-split--shot, .ps-split--shot.ps-split--flip { grid-template-columns: minmax(0, 1fr); gap: 36px; }
+  .ps-split--flip > :first-child { order: 0; }
+  .ps-hero__shot .ps-window { transform: none; }
+  .ps-grid, .ps-grid--4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ps-section { padding: 72px 0; }
+  .ps-split--glance { grid-template-columns: minmax(0, 1fr); }
+  .ps-bento { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ps-tile, .ps-tile--disk { grid-column: span 1; }
+  .ps-tile--perf { grid-column: span 2; }
+  .ps-also { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ps-part { padding-top: 80px; }
+  .ps-race { grid-template-columns: minmax(0, 1fr); }
+  .ps-race .ps-term__body { min-height: 0; }
+  .ps-split--plan { margin-top: 72px; }
+}
+@media (max-width: 600px) {
+  .ps-wrap { padding: 0 16px; }
+  .ps-grid, .ps-grid--4 { grid-template-columns: minmax(0, 1fr); }
+  .ps-glance { grid-template-columns: minmax(0, 1fr); }
+  .ps-bento, .ps-also { grid-template-columns: minmax(0, 1fr); }
+  .ps-tile, .ps-tile--perf, .ps-tile--disk { grid-column: span 1; }
+  .ps-part__head { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .ps-part__num { width: 48px; height: 48px; font-size: 1.4rem; border-radius: 12px; }
+  .ps-table--procs th:nth-child(5), .ps-table--procs td:nth-child(5) { display: none; }
+  .ps-hero { padding-top: 40px; }
+  .ps-table--procs th:nth-child(2), .ps-table--procs td:nth-child(2) { display: none; }
+  .ps-ask { position: relative; right: auto; bottom: auto; width: 100%; margin-top: 12px; }
+  .ps-term__body { min-height: 260px; }
+  .ps-split--plan .ps-term__body { min-height: 300px; }
+  .ps-race__meter { font-size: .74rem; }
+  .ps-strip__row { justify-content: flex-start; }
+}
+.ps-table--procs td.is-host { color: var(--ps-muted) !important; }
+.ps-term--mini .ps-term__body p { margin: 0 0 .2em !important; white-space: pre-wrap; }
+
+/* Swarm mock-up */
+.ps-swarm { padding: 12px 14px 14px; }
+.ps-swarm__nodes { margin-left: auto; display: inline-flex; align-items: center; gap: .3em; color: var(--ps-muted); font-size: .74rem; }
+.ps-swarm__nodes svg { width: 14px; height: 14px; }
+.ps-svc { display: grid; grid-template-columns: minmax(110px, 1fr) auto 40px; gap: 12px; align-items: center; padding: 9px 2px; border-bottom: 1px solid var(--ps-line); }
+.ps-svc__name small { display: block; color: var(--ps-muted); font-size: .7rem; font-family: "Cascadia Mono", Consolas, monospace; }
+.ps-svc__count { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--ps-green); }
+.ps-svc--warn .ps-svc__count { color: var(--ps-amber); }
+.ps-tasks { display: flex; gap: 5px; flex-wrap: wrap; justify-content: flex-end; }
+.ps-task { display: inline-flex; align-items: center; gap: .35em; font-size: .7rem; color: var(--ps-muted); border: 1px solid var(--ps-line); border-radius: 99px; padding: .1em .55em .1em .45em; background: var(--ps-panel-2); transition: color .4s, border-color .4s; }
+.ps-task::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--ps-green); transition: background .4s; }
+.ps-task--bad { color: var(--ps-red); border-color: color-mix(in srgb, var(--ps-red) 45%, var(--ps-line)); }
+.ps-task--bad::before { background: var(--ps-red); }
+.ps-task--starting { color: var(--ps-amber); border-color: color-mix(in srgb, var(--ps-amber) 45%, var(--ps-line)); }
+.ps-task--starting::before { background: var(--ps-amber); }
+.ps-swarm__alert { display: flex; gap: .5em; align-items: flex-start; margin-top: 12px; padding: 8px 10px; border-radius: 8px; font-size: .76rem; color: var(--ps-text); background: color-mix(in srgb, var(--ps-amber) 12%, transparent); border: 1px solid color-mix(in srgb, var(--ps-amber) 35%, transparent); }
+.ps-swarm__alert svg { width: 16px; height: 16px; flex: none; color: var(--ps-amber); margin-top: .1em; }
+@media (max-width: 600px) {
+  .ps-svc { grid-template-columns: minmax(0, 1fr) 36px; }
+  .ps-tasks { grid-column: 1 / -1; grid-row: 2; justify-content: flex-start; }
+}</style>
+
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="." title="Pierside" class="md-header__button md-logo" aria-label="Pierside" data-md-component="logo">
+      
+  <img src="assets/icon.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Pierside
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Pierside
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Light mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Light mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m14.3 16-.7-2h-3.2l-.7 2H7.8L11 7h2l3.2 9zM20 8.69V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12zm-9.15 3.96h2.3L12 9z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Dark mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Dark mode" for="__palette_2" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Automatic mode"  type="radio" name="__palette" id="__palette_2">
+    
+      <label class="md-header__button md-icon" title="Automatic mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog" aria-label="Search">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/Hemi131/Pierside" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Hemi131/Pierside
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+    
+  
+  
+    <li class="md-tabs__item md-tabs__item--active">
+      <a href="." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="install-and-update/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Install
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="remote-engines/" class="md-tabs__link">
+          
+  
+  
+  Documentation
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="changelog/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Changelog
+
+      </a>
+    </li>
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+<div class="ps-home">
+
+<!-- ───────────── Hero ───────────── -->
+<section class="ps-hero">
+  <div class="ps-wrap ps-hero__grid">
+    <div class="ps-hero__text">
+      <p class="ps-eyebrow">Free and open source · Rancher Desktop extension</p>
+      <h1>The Docker Desktop experience, <span class="ps-grad">on every server you run.</span></h1>
+      <p class="ps-lead">Pierside adds a familiar container UI to Rancher Desktop: containers, Compose projects, images and volumes, on your own machine or on remote servers over plain SSH. And when you want help, your AI assistant can work with them too, within limits you set.</p>
+      <div class="ps-cta">
+        <a class="ps-btn ps-btn--primary" href="install-and-update/">Install Pierside</a>
+        <a class="ps-btn" href="https://github.com/Hemi131/Pierside"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg> View on GitHub</a>
+      </div>
+      <div class="ps-install" data-tabs>
+        <div class="ps-install__tabs" role="tablist">
+          <button role="tab" aria-selected="true" data-tab="ghcr">GitHub</button>
+          <button role="tab" aria-selected="false" data-tab="hub">Docker Hub</button>
+        </div>
+        <div class="ps-install__cmd" data-panel="ghcr"><span class="ps-prompt">$</span><code>rdctl extension install ghcr.io/hemi131/pierside:latest</code><button class="ps-copy" aria-label="Copy"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 21H8V7h11m0-2H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2m-3-4H4a2 2 0 0 0-2 2v14h2V3h12z"/></svg></button></div>
+        <div class="ps-install__cmd" data-panel="hub" hidden><span class="ps-prompt">$</span><code>rdctl extension install hemi131/pierside:latest</code><button class="ps-copy" aria-label="Copy"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 21H8V7h11m0-2H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2m-3-4H4a2 2 0 0 0-2 2v14h2V3h12z"/></svg></button></div>
+        <p class="ps-install__note">Needs Rancher Desktop 1.23+ with the dockerd (moby) engine. Windows, macOS, Linux · amd64 and arm64.</p>
+      </div>
+    </div>
+    <div class="ps-hero__shot ps-reveal">
+      <div class="ps-window">
+        <div class="ps-window__bar"><i></i><i></i><i></i><span>Pierside</span></div>
+        <img src="images/containers.webp" srcset="images/containers-680.webp 680w, images/containers-1020.webp 1020w, images/containers.webp 2040w" sizes="(max-width: 1128px) calc(100vw - 48px), 1080px" alt="Pierside's containers list, grouped by Compose project" width="2040" height="1200" fetchpriority="high">
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ───────────── Strip ───────────── -->
+<section class="ps-strip">
+  <div class="ps-wrap ps-strip__row">
+    <a href="#engine"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21.81 10.25c-.06-.04-.56-.43-1.64-.43-.28 0-.56.03-.84.08-.21-1.4-1.38-2.11-1.43-2.14l-.29-.17-.18.27c-.24.36-.43.77-.51 1.19-.2.8-.08 1.56.33 2.21-.49.28-1.29.35-1.46.35H2.62c-.34 0-.62.28-.62.63 0 1.15.18 2.3.58 3.38.45 1.19 1.13 2.07 2 2.61.98.6 2.59.94 4.42.94.79 0 1.61-.07 2.42-.22 1.12-.2 2.2-.59 3.19-1.16A8.3 8.3 0 0 0 16.78 16c1.05-1.17 1.67-2.5 2.12-3.65h.19c1.14 0 1.85-.46 2.24-.85.26-.24.45-.53.59-.87l.08-.24zm-17.96.99h1.76c.08 0 .16-.07.16-.16V9.5c0-.08-.07-.16-.16-.16H3.85c-.09 0-.16.07-.16.16v1.58c.01.09.07.16.16.16m2.43 0h1.76c.08 0 .16-.07.16-.16V9.5c0-.08-.07-.16-.16-.16H6.28c-.09 0-.16.07-.16.16v1.58c.01.09.07.16.16.16m2.47 0h1.75c.1 0 .17-.07.17-.16V9.5c0-.08-.06-.16-.17-.16H8.75c-.08 0-.15.07-.15.16v1.58c0 .09.06.16.15.16m2.44 0h1.77c.08 0 .15-.07.15-.16V9.5c0-.08-.06-.16-.15-.16h-1.77c-.08 0-.15.07-.15.16v1.58c0 .09.07.16.15.16M6.28 9h1.76c.08 0 .16-.09.16-.18V7.25c0-.09-.07-.16-.16-.16H6.28c-.09 0-.16.06-.16.16v1.57c.01.09.07.18.16.18m2.47 0h1.75c.1 0 .17-.09.17-.18V7.25c0-.09-.06-.16-.17-.16H8.75c-.08 0-.15.06-.15.16v1.57c0 .09.06.18.15.18m2.44 0h1.77c.08 0 .15-.09.15-.18V7.25c0-.09-.07-.16-.15-.16h-1.77c-.08 0-.15.06-.15.16v1.57c0 .09.07.18.15.18m0-2.28h1.77c.08 0 .15-.07.15-.16V5c0-.1-.07-.17-.15-.17h-1.77c-.08 0-.15.06-.15.17v1.56c0 .08.07.16.15.16m2.46 4.52h1.76c.09 0 .16-.07.16-.16V9.5c0-.08-.07-.16-.16-.16h-1.76c-.08 0-.15.07-.15.16v1.58c0 .09.07.16.15.16"/></svg> Containers, Compose, Swarm</a>
+    <a href="#ai"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M17.5 15.5c0 1.11-.89 2-2 2s-2-.89-2-2 .9-2 2-2 2 .9 2 2m-9-2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.89 2-2-.89-2-2-2M23 15v3c0 .55-.45 1-1 1h-1v1c0 1.11-.89 2-2 2H5a2 2 0 0 1-2-2v-1H2c-.55 0-1-.45-1-1v-3c0-.55.45-1 1-1h1c0-3.87 3.13-7 7-7h1V5.73c-.6-.34-1-.99-1-1.73 0-1.1.9-2 2-2s2 .9 2 2c0 .74-.4 1.39-1 1.73V7h1c3.87 0 7 3.13 7 7h1c.55 0 1 .45 1 1m-2 1h-2v-2c0-2.76-2.24-5-5-5h-4c-2.76 0-5 2.24-5 5v2H3v1h2v3h14v-3h2z"/></svg> MCP server for AI, 67 tools and scripts</a>
+    <a href="#servers"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 19h1a1 1 0 0 1 1 1h7v2h-7a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1H2v-2h7a1 1 0 0 1 1-1h1v-2H4a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1h16a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1h-7zM4 3h16a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1m5 4h1V5H9zm0 8h1v-2H9zM5 5v2h2V5zm0 8v2h2v-2z"/></svg> Servers over SSH, nothing to install</a>
+    <span><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 11c0 5.55-3.84 10.74-9 12-5.16-1.26-9-6.45-9-12V5l9-4 9 4zm-9 10c3.75-1 7-5.46 7-9.78V6.3l-7-3.12L5 6.3v4.92C5 15.54 8.25 20 12 21m-2-4-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9"/></svg> Open source, Apache-2.0</span>
+  </div>
+</section>
+
+<!-- ═════════════ Part 1: on every engine ═════════════ -->
+<section class="ps-part ps-reveal" id="engine">
+  <div class="ps-wrap ps-part__head">
+    <span class="ps-part__num">1</span>
+    <div>
+      <p class="ps-eyebrow">On every engine</p>
+      <h2>Everything you reach for, where you expect it</h2>
+      <p>If you know Docker Desktop, you already know Pierside: the same layout, the same actions, a few things done better. On your own machine and on every server alike.</p>
+    </div>
+  </div>
+</section>
+
+<section class="ps-section ps-section--tight">
+  <div class="ps-wrap ps-split ps-split--shot ps-reveal">
+    <div class="ps-split__text">
+      <h3>Compose projects, logs merged</h3>
+      <p>Containers grouped by project, with Start all, Stop all, Up, Down and Pull. The logs of every service in one stream, colour-coded, in time order, with search and a filter per service. Projects stay listed after <code>down</code>.</p>
+      <a class="ps-more" href="compose/">Compose projects →</a>
+    </div>
+    <div class="ps-window"><div class="ps-window__bar"><i></i><i></i><i></i></div><img src="images/compose-logs.webp" srcset="images/compose-logs-680.webp 680w, images/compose-logs-1020.webp 1020w, images/compose-logs.webp 2040w" sizes="(max-width: 960px) calc(100vw - 48px), 680px" alt="Merged, colour-coded logs of all services of a Compose project" width="2040" height="1200" loading="lazy"></div>
+  </div>
+  <div class="ps-wrap ps-split ps-split--shot ps-split--flip ps-reveal">
+    <div class="ps-split__text">
+      <h3>Files and a real editor</h3>
+      <p>Browse, find, upload and edit files in containers and volumes. Syntax highlighting, error checking for JSON, YAML and Compose files, a diff of your changes before saving, and the VS Code shortcuts you're used to.</p>
+      <a class="ps-more" href="files-and-volumes/">Files, volumes and the editor →</a>
+    </div>
+    <div class="ps-window"><div class="ps-window__bar"><i></i><i></i><i></i></div><img src="images/files-editor.webp" srcset="images/files-editor-680.webp 680w, images/files-editor-1020.webp 1020w, images/files-editor.webp 2040w" sizes="(max-width: 960px) calc(100vw - 48px), 680px" alt="A container's file browser with a config file open in the editor" width="2040" height="1200" loading="lazy"></div>
+  </div>
+  <div class="ps-wrap ps-split ps-split--shot ps-reveal">
+    <div class="ps-split__text">
+      <h3>Swarm, too</h3>
+      <p>Stacks, services, tasks, nodes, secrets and configs. Scale a service, update its image or roll it back, and see a task that keeps failing on any node before your users do.</p>
+    </div>
+    <div class="ps-mock ps-swarm" data-swarm>
+      <div class="ps-mock__bar"><b>shop</b><span class="ps-chip">stack</span><span class="ps-swarm__nodes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 1h16a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1m0 8h16a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1m0 8h16a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1M9 5h1V3H9zm0 8h1v-2H9zm0 8h1v-2H9zM5 3v2h2V3zm0 8v2h2v-2zm0 8v2h2v-2z"/></svg> 3 nodes</span></div>
+      <div class="ps-svc">
+        <div class="ps-svc__name"><b>shop_web</b><small>shop/web:2.4</small></div>
+        <div class="ps-tasks"><span class="ps-task">node-1</span><span class="ps-task">node-2</span><span class="ps-task">node-3</span></div>
+        <div class="ps-svc__count">3/3</div>
+      </div>
+      <div class="ps-svc ps-svc--warn">
+        <div class="ps-svc__name"><b>shop_api</b><small>shop/api:2.5</small></div>
+        <div class="ps-tasks"><span class="ps-task">node-1</span><span class="ps-task ps-task--bad" data-flaky>node-2</span><span class="ps-task">node-3</span></div>
+        <div class="ps-svc__count">2/3</div>
+      </div>
+      <div class="ps-svc">
+        <div class="ps-svc__name"><b>shop_worker</b><small>shop/worker:2.4</small></div>
+        <div class="ps-tasks"><span class="ps-task">node-3</span></div>
+        <div class="ps-svc__count">1/1</div>
+      </div>
+      <div class="ps-svc">
+        <div class="ps-svc__name"><b>shop_proxy</b><small>traefik:3.1 · global</small></div>
+        <div class="ps-tasks"><span class="ps-task">node-1</span><span class="ps-task">node-2</span><span class="ps-task">node-3</span></div>
+        <div class="ps-svc__count">3/3</div>
+      </div>
+      <div class="ps-swarm__alert"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2 1 21h22M12 6l7.53 13H4.47M11 10v4h2v-4m-2 6v2h2v-2"/></svg> <span><b>shop_api</b>: a task on node-2 failed 3 times in 5 minutes (exit code 1).</span></div>
+    </div>
+  </div>
+
+  <div class="ps-wrap">
+    <div class="ps-grid ps-grid--4 ps-reveal">
+      <div class="ps-card"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 19V7H4v12zm0-16a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zm-7 14v-2h5v2zm-3.42-4L5.57 9H8.4l3.3 3.3c.39.39.39 1.03 0 1.42L8.42 17H5.59z"/></svg><h4>Shells that behave</h4><p>Full-screen programs, resizing, word editing and your own command palette.</p></div>
+      <div class="ps-card"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 8h-2.81c-.45-.8-1.07-1.5-1.82-2L17 4.41 15.59 3l-2.17 2.17a6 6 0 0 0-2.83 0L8.41 3 7 4.41 8.62 6c-.75.5-1.36 1.21-1.81 2H4v2h2.09c-.06.33-.09.66-.09 1v1H4v2h2v1c0 .34.03.67.09 1H4v2h2.81A5.99 5.99 0 0 0 15 20.18c.91-.52 1.67-1.28 2.19-2.18H20v-2h-2.09c.06-.33.09-.66.09-1v-1h2v-2h-2v-1c0-.34-.03-.67-.09-1H20zm-4 7a4 4 0 0 1-4 4 4 4 0 0 1-4-4v-4a4 4 0 0 1 4-4 4 4 0 0 1 4 4zm-2-5v2h-4v-2zm-4 4h4v2h-4z"/></svg><h4>Debug shell</h4><p>A shell even for slim images that have none of their own.</p></div>
+      <div class="ps-card"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m21 9-4-4v3h-7v2h7v3M7 11l-4 4 4 4v-3h7v-2H7z"/></svg><h4>Port forwarding</h4><p>Reach a container's port on <code>localhost</code> without recreating it.</p></div>
+      <div class="ps-card"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m12 18.54 7.37-5.74L21 14.07l-9 7-9-7 1.62-1.26zM12 16 3 9l9-7 9 7zm0-11.47L6.26 9 12 13.47 17.74 9z"/></svg><h4>Images</h4><p>Pull with progress, run with options, inspect layers, prune.</p></div>
+      <div class="ps-card"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 3C7.58 3 4 4.79 4 7v10c0 2.21 3.59 4 8 4s8-1.79 8-4V7c0-2.21-3.58-4-8-4m6 14c0 .5-2.13 2-6 2s-6-1.5-6-2v-2.23c1.61.78 3.72 1.23 6 1.23s4.39-.45 6-1.23zm0-4.55c-1.3.95-3.58 1.55-6 1.55s-4.7-.6-6-1.55V9.64c1.47.83 3.61 1.36 6 1.36s4.53-.53 6-1.36zM12 9C8.13 9 6 7.5 6 7s2.13-2 6-2 6 1.5 6 2-2.13 2-6 2"/></svg><h4>Volumes and networks</h4><p>Browse and edit what a volume holds; connect and disconnect containers.</p></div>
+      <div class="ps-card"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 2.05v3.03c3.39.49 6 3.39 6 6.92 0 .9-.18 1.75-.5 2.54l2.62 1.53c.56-1.24.88-2.62.88-4.07 0-5.18-3.95-9.45-9-9.95M12 19a7 7 0 0 1-7-7c0-3.53 2.61-6.43 6-6.92V2.05c-5.06.5-9 4.76-9 9.95a10 10 0 0 0 10 10c3.3 0 6.23-1.61 8.05-4.09l-2.6-1.53A6.89 6.89 0 0 1 12 19"/></svg><h4>Disk usage</h4><p>What takes the space in Docker, with one-click clean-up.</p></div>
+      <div class="ps-card"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 21h4a2 2 0 0 1-2 2 2 2 0 0 1-2-2m11-2v1H3v-1l2-2v-6c0-3.1 2.03-5.83 5-6.71V4a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.29c2.97.88 5 3.61 5 6.71v6zm-4-8a5 5 0 0 0-5-5 5 5 0 0 0-5 5v7h10zm2.75-7.81-1.42 1.42A8.98 8.98 0 0 1 21 11h2c0-2.93-1.16-5.75-3.25-7.81M1 11h2c0-2.4.96-4.7 2.67-6.39L4.25 3.19A10.96 10.96 0 0 0 1 11"/></svg><h4>Alerts that don't spam</h4><p>Restart loops, out of memory, unhealthy: told once, with mute and pause.</p></div>
+      <div class="ps-card"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M22 17V7H6v10zm0-12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-6v2h2v2h-8v-2h2v-2H6c-1.11 0-2-.89-2-2V7a2 2 0 0 1 2-2zM2 3v12H0V3a2 2 0 0 1 2-2h18v2z"/></svg><h4>Separate window</h4><p>Open Pierside in your browser on a second monitor.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ───────────── AI access ───────────── -->
+<section class="ps-section ps-section--tint ps-reveal" id="ai">
+  <div class="ps-wrap ps-split ps-split--flip">
+    <div class="ps-split__text">
+      <p class="ps-eyebrow">AI access</p>
+      <h2>Let your assistant help, <span class="ps-nowrap">on your terms</span></h2>
+      <p>Pierside is also an MCP server. Claude Code, Devin CLI or any other MCP client can read logs, check health, edit files or restart a service for you, but only on the engines, containers and actions you allow.</p>
+      <ul class="ps-checks">
+        <li><b>No secret handed to the assistant</b>: you allow each session in Pierside, comparing a four-letter code.</li>
+        <li><b>Fine-grained limits</b>: which engines, which containers or Compose projects, which of 21 permissions, which file paths.</li>
+        <li><b>Ask before each change</b>, with exactly what's about to happen. Every call is listed under Recent activity.</li>
+        <li><b>One click</b> adds the connection to Claude Code or Devin CLI.</li>
+      </ul>
+      <a class="ps-more" href="ai-access/">AI access →</a>
+    </div>
+
+    <div class="ps-split__demo">
+      <div class="ps-ai" data-ai>
+        <div class="ps-term">
+          <div class="ps-window__bar"><i></i><i></i><i></i><span>claude</span></div>
+          <div class="ps-term__body" data-ai-log></div>
+        </div>
+        <div class="ps-ask" data-ai-ask hidden>
+          <div class="ps-ask__from"><img src="assets/icon.svg" alt=""> Pierside · access question</div>
+          <div class="ps-ask__head"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M17.5 15.5c0 1.11-.89 2-2 2s-2-.89-2-2 .9-2 2-2 2 .9 2 2m-9-2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.89 2-2-.89-2-2-2M23 15v3c0 .55-.45 1-1 1h-1v1c0 1.11-.89 2-2 2H5a2 2 0 0 1-2-2v-1H2c-.55 0-1-.45-1-1v-3c0-.55.45-1 1-1h1c0-3.87 3.13-7 7-7h1V5.73c-.6-.34-1-.99-1-1.73 0-1.1.9-2 2-2s2 .9 2 2c0 .74-.4 1.39-1 1.73V7h1c3.87 0 7 3.13 7 7h1c.55 0 1 .45 1 1m-2 1h-2v-2c0-2.76-2.24-5-5-5h-4c-2.76 0-5 2.24-5 5v2H3v1h2v3h14v-3h2z"/></svg> <b>Claude Code</b> wants to use <b>webshop</b></div>
+          <p>Session code <span class="ps-code-pill">K7QF</span> · engine <b>production</b></p>
+          <div class="ps-ask__btns">
+            <button class="ps-btn ps-btn--primary ps-btn--sm" data-ai-allow>Allow this session</button>
+            <button class="ps-btn ps-btn--sm" disabled>Allow longer…</button>
+            <button class="ps-btn ps-btn--sm" disabled>Deny</button>
+          </div>
+        </div>
+        <button class="ps-replay" data-ai-replay hidden><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 5V1L7 6l5 5V7a6 6 0 0 1 6 6 6 6 0 0 1-6 6 6 6 0 0 1-6-6H4a8 8 0 0 0 8 8 8 8 0 0 0 8-8 8 8 0 0 0-8-8"/></svg> Replay</button>
+      </div>
+      <p class="ps-demo-hint">The question appears in Pierside, not in the assistant.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ───────────── Scripts (code mode) ───────────── -->
+<section class="ps-section ps-scripts" id="scripts">
+  <div class="ps-wrap">
+    <div class="ps-head ps-reveal">
+      <p class="ps-eyebrow">AI access · Scripts</p>
+      <h2>Big jobs in one step, <span class="ps-nowrap">every step still checked</span></h2>
+      <p>Instead of calling tools one by one, your assistant can send a short Python script that calls them. Only what the script prints comes back, so a question about twenty containers takes one step and a fraction of the assistant's context.</p>
+    </div>
+
+    <div class="ps-race ps-reveal" data-race>
+      <div class="ps-race__side">
+        <div class="ps-term">
+          <div class="ps-window__bar"><i></i><i></i><i></i><span>Call by call</span></div>
+          <div class="ps-term__body" data-race-log="slow"></div>
+          <div class="ps-race__meter"><span><b data-race-calls="slow">0</b> calls</span><span><b data-race-chars="slow">0</b> characters to read</span></div>
+        </div>
+      </div>
+      <div class="ps-race__side ps-race__side--win">
+        <div class="ps-term">
+          <div class="ps-window__bar"><i></i><i></i><i></i><span>One script</span></div>
+          <div class="ps-term__body" data-race-log="fast"></div>
+          <div class="ps-race__meter"><span><b data-race-calls="fast">0</b> call</span><span><b data-race-chars="fast">0</b> characters to read</span></div>
+        </div>
+        <button class="ps-replay" data-race-replay hidden><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 5V1L7 6l5 5V7a6 6 0 0 1 6 6 6 6 0 0 1-6 6 6 6 0 0 1-6-6H4a8 8 0 0 0 8 8 8 8 0 0 0 8-8 8 8 0 0 0-8-8"/></svg> Replay</button>
+      </div>
+    </div>
+    <p class="ps-demo-hint">An example with 12 running containers. The numbers are illustrative.</p>
+
+    <div class="ps-split ps-split--plan ps-reveal">
+      <div class="ps-split__text">
+        <h3>See the changes before they happen</h3>
+        <p>A script that changes something first runs without changing anything. Pierside shows you the list of changes it would make, and only once you allow it does the script run again, allowed to make exactly those changes and nothing else.</p>
+        <ul class="ps-checks">
+          <li><b>Same limits as direct calls.</b> A script can use only its connection's engines, containers, permissions and paths. Every call it makes is checked and listed under Recent activity, under the script that made it.</li>
+          <li><b>Exactly the list you allowed.</b> Each change is made once, with the same arguments, on the same containers. Anything else stops the script.</li>
+          <li><b>A sandbox of its own.</b> Each script gets a throwaway container on your computer with no network, no Docker, none of your files, a read-only file system, one CPU and 256 MB, and limits on time and calls.</li>
+        </ul>
+        <p class="ps-fineprint">Run scripts is off until you allow it for a connection. You can also read each script before it runs, or be asked at the first change of each kind or at every change.</p>
+        <a class="ps-more" href="ai-access/#scripts">AI access: scripts →</a>
+      </div>
+
+      <div class="ps-split__demo">
+        <div class="ps-ai" data-plan>
+          <div class="ps-term">
+            <div class="ps-window__bar"><i></i><i></i><i></i><span>claude</span></div>
+            <div class="ps-term__body" data-plan-log></div>
+          </div>
+          <div class="ps-ask ps-ask--plan" data-plan-ask hidden>
+            <div class="ps-ask__from"><img src="assets/icon.svg" alt=""> Pierside · allow the script's changes?</div>
+            <div class="ps-ask__head"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M17.5 15.5c0 1.11-.89 2-2 2s-2-.89-2-2 .9-2 2-2 2 .9 2 2m-9-2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.89 2-2-.89-2-2-2M23 15v3c0 .55-.45 1-1 1h-1v1c0 1.11-.89 2-2 2H5a2 2 0 0 1-2-2v-1H2c-.55 0-1-.45-1-1v-3c0-.55.45-1 1-1h1c0-3.87 3.13-7 7-7h1V5.73c-.6-.34-1-.99-1-1.73 0-1.1.9-2 2-2s2 .9 2 2c0 .74-.4 1.39-1 1.73V7h1c3.87 0 7 3.13 7 7h1c.55 0 1 .45 1 1m-2 1h-2v-2c0-2.76-2.24-5-5-5h-4c-2.76 0-5 2.24-5 5v2H3v1h2v3h14v-3h2z"/></svg> The script ran once <b>without changing anything</b>. It would make these changes:</div>
+            <ul class="ps-plan">
+              <li>delete volume cache_old</li>
+              <li>delete volume build_tmp</li>
+              <li>delete volume test_db_2024</li>
+            </ul>
+            <div class="ps-ask__btns">
+              <button class="ps-btn ps-btn--sm" disabled>Deny</button>
+              <button class="ps-btn ps-btn--primary ps-btn--sm" data-plan-allow>Allow these changes</button>
+            </div>
+          </div>
+          <button class="ps-replay" data-plan-replay hidden><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 5V1L7 6l5 5V7a6 6 0 0 1 6 6 6 6 0 0 1-6 6 6 6 0 0 1-6-6H4a8 8 0 0 0 8 8 8 8 0 0 0 8-8 8 8 0 0 0-8-8"/></svg> Replay</button>
+        </div>
+        <p class="ps-demo-hint">If the script tries anything not on the list, it is stopped.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═════════════ Part 2: on your servers ═════════════ -->
+<section class="ps-part ps-part--servers ps-reveal" id="servers">
+  <div class="ps-wrap ps-part__head">
+    <span class="ps-part__num">2</span>
+    <div>
+      <p class="ps-eyebrow">On your servers</p>
+      <h2>Not just their Docker: the servers themselves</h2>
+      <p>Add a server with its address and an SSH key. Nothing is installed on it, and it doesn't even need SSH forwarding. Then Pierside gives you what you'd otherwise open a terminal, <code>htop</code> and <code>du</code> for.</p>
+    </div>
+  </div>
+</section>
+
+<section class="ps-section ps-section--tight ps-section--servers">
+  <div class="ps-wrap">
+
+    <!-- Engines at a glance -->
+    <div class="ps-split ps-split--glance ps-reveal">
+      <div class="ps-split__text">
+        <h3>All your engines at a glance</h3>
+        <p>Every server on one page: can it be reached, what runs, what uses the CPU and memory, which containers need attention. Switch with one click.</p>
+        <ul class="ps-checks">
+          <li><b>A colour per engine</b>: production framed in red is hard to mistake for staging.</li>
+          <li><b>Watch in the background</b>: alerts from a server even while you work on another one.</li>
+        </ul>
+        <a class="ps-more" href="remote-engines/">Remote engines over SSH →</a>
+      </div>
+      <div class="ps-glance" data-glance>
+        <div class="ps-gcard">
+          <div class="ps-gcard__head"><span class="ps-dot"></span><b>Local</b><small>Rancher Desktop</small></div>
+          <div class="ps-gcard__stat"><span class="ps-status">Reachable</span><span>4 running</span></div>
+          <div class="ps-gmeter"><label>CPU</label><div class="ps-bar"><i data-g="0" style="width:12%"></i></div></div>
+          <div class="ps-gmeter"><label>Mem</label><div class="ps-bar"><i style="width:22%"></i></div></div>
+          <div class="ps-gcard__ok"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8m4.59-12.42L10 14.17l-2.59-2.58L6 13l4 4 8-8z"/></svg> All fine</div>
+        </div>
+        <div class="ps-gcard ps-gcard--amber">
+          <div class="ps-gcard__head"><span class="ps-dot ps-dot--amber"></span><b>staging</b><small>deploy@stage-01</small><span class="ps-eye" title="Watched in the background"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 9a3 3 0 0 1 3 3 3 3 0 0 1-3 3 3 3 0 0 1-3-3 3 3 0 0 1 3-3m0-4.5c5 0 9.27 3.11 11 7.5-1.73 4.39-6 7.5-11 7.5S2.73 16.39 1 12c1.73-4.39 6-7.5 11-7.5M3.18 12a9.821 9.821 0 0 0 17.64 0 9.821 9.821 0 0 0-17.64 0"/></svg></span></div>
+          <div class="ps-gcard__stat"><span class="ps-status">Reachable</span><span>7 running</span></div>
+          <div class="ps-gmeter"><label>CPU</label><div class="ps-bar"><i data-g="1" style="width:41%"></i></div></div>
+          <div class="ps-gmeter"><label>Mem</label><div class="ps-bar"><i style="width:57%"></i></div></div>
+          <div class="ps-gcard__bad"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2 1 21h22M12 6l7.53 13H4.47M11 10v4h2v-4m-2 6v2h2v-2"/></svg> api restarting</div>
+        </div>
+        <div class="ps-gcard ps-gcard--red">
+          <div class="ps-gcard__head"><span class="ps-dot ps-dot--red"></span><b>production</b><small>deploy@prod-01</small><span class="ps-eye" title="Watched in the background"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 9a3 3 0 0 1 3 3 3 3 0 0 1-3 3 3 3 0 0 1-3-3 3 3 0 0 1 3-3m0-4.5c5 0 9.27 3.11 11 7.5-1.73 4.39-6 7.5-11 7.5S2.73 16.39 1 12c1.73-4.39 6-7.5 11-7.5M3.18 12a9.821 9.821 0 0 0 17.64 0 9.821 9.821 0 0 0-17.64 0"/></svg></span></div>
+          <div class="ps-gcard__stat"><span class="ps-status">Reachable</span><span>12 running</span></div>
+          <div class="ps-gmeter"><label>CPU</label><div class="ps-bar"><i data-g="2" style="width:68%"></i></div></div>
+          <div class="ps-gmeter"><label>Mem</label><div class="ps-bar"><i style="width:74%"></i></div></div>
+          <div class="ps-gcard__ok"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8m4.59-12.42L10 14.17l-2.59-2.58L6 13l4 4 8-8z"/></svg> All fine</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bento -->
+    <div class="ps-bento">
+
+      <article class="ps-tile ps-tile--perf ps-reveal">
+        <div class="ps-tile__text">
+          <h3><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 16a3 3 0 0 1-3-3c0-1.12.61-2.1 1.5-2.61l9.71-5.62-5.53 9.58c-.5.98-1.51 1.65-2.68 1.65m0-13c1.81 0 3.5.5 4.97 1.32l-2.1 1.21C14 5.19 13 5 12 5a8 8 0 0 0-8 8c0 2.21.89 4.21 2.34 5.65h.01c.39.39.39 1.02 0 1.41s-1.03.39-1.42.01A9.97 9.97 0 0 1 2 13 10 10 0 0 1 12 3m10 10c0 2.76-1.12 5.26-2.93 7.07-.39.38-1.02.38-1.41-.01a.996.996 0 0 1 0-1.41A7.95 7.95 0 0 0 20 13c0-1-.19-2-.54-2.9L20.67 8C21.5 9.5 22 11.18 22 13"/></svg> Server performance</h3>
+          <p>Like <code>htop</code>, with each process's <b>container</b> next to it. CPU, memory, disks and network with 10-minute charts, a note when something stands out, and Lower priority, End or Force end on any process.</p>
+        </div>
+        <div class="ps-mock" data-perf>
+          <div class="ps-meters">
+            <div><label>CPU</label><div class="ps-bar"><i data-meter="cpu"></i></div><span data-meter-val="cpu"></span></div>
+            <div><label>Memory</label><div class="ps-bar"><i data-meter="mem"></i></div><span data-meter-val="mem"></span></div>
+          </div>
+          <svg class="ps-spark" viewBox="0 0 300 40" preserveAspectRatio="none"><polyline data-spark points=""/></svg>
+          <table class="ps-table ps-table--procs">
+            <thead><tr><th>Process</th><th>Container</th><th>CPU</th><th>Memory</th><th>Disk</th></tr></thead>
+            <tbody data-procs></tbody>
+          </table>
+        </div>
+      </article>
+
+      <article class="ps-tile ps-tile--disk ps-reveal">
+        <div class="ps-tile__text">
+          <h3><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M6 2h12a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2m6 2a6 6 0 0 0-6 6c0 3.31 2.69 6 6.1 6l-.88-2.23a1.01 1.01 0 0 1 .37-1.37l.86-.5a1.01 1.01 0 0 1 1.37.37l1.92 2.42A5.98 5.98 0 0 0 18 10a6 6 0 0 0-6-6m0 5a1 1 0 0 1 1 1 1 1 0 0 1-1 1 1 1 0 0 1-1-1 1 1 0 0 1 1-1m-5 9a1 1 0 0 0-1 1 1 1 0 0 0 1 1 1 1 0 0 0 1-1 1 1 0 0 0-1-1m5.09-4.73 2.49 6.31 2.59-1.5-4.22-5.31z"/></svg> Server disk</h3>
+          <p>What takes the space, folder by folder, measured gently in the background.</p>
+        </div>
+        <div class="ps-mock" data-disk>
+          <div class="ps-disk__fs"><span>/</span><div class="ps-bar ps-bar--warn"><i style="width:91%"></i></div><b>91 %</b></div>
+          <div class="ps-crumbs">/ var / lib</div>
+          <ul class="ps-disk__list">
+            <li data-size="38.2"><span>docker</span><div class="ps-bar"><i></i></div><b></b></li>
+            <li data-size="12.4"><span>postgresql</span><div class="ps-bar"><i></i></div><b></b></li>
+            <li data-size="3.1"><span>containerd</span><div class="ps-bar"><i></i></div><b></b></li>
+            <li data-size="0.9"><span>apt</span><div class="ps-bar"><i></i></div><b></b></li>
+            <li data-size="0.2"><span>systemd</span><div class="ps-bar"><i></i></div><b></b></li>
+          </ul>
+        </div>
+      </article>
+
+      <article class="ps-tile ps-reveal">
+        <div class="ps-tile__text">
+          <h3><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 18H4V8h16m0-2h-8l-2-2H4c-1.11 0-2 .89-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2"/></svg> Server files</h3>
+          <p>Browse, find and edit the server's own files. No permission as your user? Pierside does it through Docker, once you agree.</p>
+        </div>
+        <div class="ps-mock">
+          <div class="ps-crumbs">/ etc / nginx / conf.d</div>
+          <ul class="ps-filelist">
+            <li><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 4H4c-1.11 0-2 .89-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8z"/></svg> snippets<small>drwxr-xr-x</small></li>
+            <li class="is-open"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M6 2a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm0 2h7v5h5v11H6zm2 8v2h8v-2zm0 4v2h5v-2z"/></svg> shop.conf<small>-rw-r-----</small></li>
+            <li><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M6 2a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm0 2h7v5h5v11H6zm2 8v2h8v-2zm0 4v2h5v-2z"/></svg> default.conf<small>-rw-r--r--</small></li>
+          </ul>
+          <p class="ps-files__note"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 11c0 5.55-3.84 10.74-9 12-5.16-1.26-9-6.45-9-12V5l9-4 9 4zm-9 10c3.75-1 7-5.46 7-9.78V6.3l-7-3.12L5 6.3v4.92C5 15.54 8.25 20 12 21m0-15a3 3 0 0 1 3 3c0 1.31-.83 2.42-2 2.83V14h2v2h-2v2h-2v-6.17A2.99 2.99 0 0 1 9 9a3 3 0 0 1 3-3m0 2a1 1 0 0 0-1 1 1 1 0 0 0 1 1 1 1 0 0 0 1-1 1 1 0 0 0-1-1"/></svg> Opened through Docker: <code>deploy</code> may not read it.</p>
+        </div>
+      </article>
+
+      <article class="ps-tile ps-reveal">
+        <div class="ps-tile__text">
+          <h3><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 19v-3h8v3zm-4.5-6L2.47 7h4.24l4.96 4.95c.58.59.58 1.55 0 2.12L6.74 19H2.5z"/></svg> Server terminal</h3>
+          <p>A full shell on the server, and if you switch it on, as <b>root</b> through Docker, without sudo.</p>
+        </div>
+        <div class="ps-term ps-term--mini">
+          <div class="ps-window__bar"><i></i><i></i><i></i><span>prod-01</span><span class="ps-root">root</span></div>
+          <div class="ps-term__body" data-rootterm></div>
+        </div>
+      </article>
+
+      <article class="ps-tile ps-reveal">
+        <div class="ps-tile__text">
+          <h3><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2a2 2 0 0 0-2 2 2 2 0 0 0 0 .29C7.12 5.14 5 7.82 5 11v6l-2 2v1h18v-1l-2-2v-6c0-3.18-2.12-5.86-5-6.71A2 2 0 0 0 14 4a2 2 0 0 0-2-2m0 4a5 5 0 0 1 5 5v7H7v-7a5 5 0 0 1 5-5m9 1v6h2V7zm0 8v2h2v-2zm-11 6a2 2 0 0 0 2 2 2 2 0 0 0 2-2z"/></svg> Server alerts</h3>
+          <p>Memory almost full, swapping, high load, a disk filling up: you hear about it, even while you're on another engine.</p>
+        </div>
+        <div class="ps-toasts" data-toasts>
+          <div class="ps-toast"><span class="ps-toast__icon ps-toast__icon--red"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M17 17H7V7h10m4 4V9h-2V7a2 2 0 0 0-2-2h-2V3h-2v2h-2V3H9v2H7c-1.11 0-2 .89-2 2v2H3v2h2v2H3v2h2v2a2 2 0 0 0 2 2h2v2h2v-2h2v2h2v-2h2a2 2 0 0 0 2-2v-2h2v-2h-2v-2m-6 2h-2v-2h2m2-2H9v6h6z"/></svg></span><div><b>production</b> · Memory almost full<small>6 % available for 2 minutes</small></div></div>
+          <div class="ps-toast"><span class="ps-toast__icon ps-toast__icon--amber"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M6 2h12a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2m6 2a6 6 0 0 0-6 6c0 3.31 2.69 6 6.1 6l-.88-2.23a1.01 1.01 0 0 1 .37-1.37l.86-.5a1.01 1.01 0 0 1 1.37.37l1.92 2.42A5.98 5.98 0 0 0 18 10a6 6 0 0 0-6-6m0 5a1 1 0 0 1 1 1 1 1 0 0 1-1 1 1 1 0 0 1-1-1 1 1 0 0 1 1-1m-5 9a1 1 0 0 0-1 1 1 1 0 0 0 1 1 1 1 0 0 0 1-1 1 1 0 0 0-1-1m5.09-4.73 2.49 6.31 2.59-1.5-4.22-5.31z"/></svg></span><div><b>production</b> · Disk / is 91 % full<small>41 GB of 45 GB used</small></div></div>
+          <div class="ps-toast__btns"><span>Mute 1 h</span><span>Pause all 15 min</span></div>
+        </div>
+      </article>
+
+    </div>
+
+    <ul class="ps-also ps-reveal">
+      <li><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21.81 10.25c-.06-.04-.56-.43-1.64-.43-.28 0-.56.03-.84.08-.21-1.4-1.38-2.11-1.43-2.14l-.29-.17-.18.27c-.24.36-.43.77-.51 1.19-.2.8-.08 1.56.33 2.21-.49.28-1.29.35-1.46.35H2.62c-.34 0-.62.28-.62.63 0 1.15.18 2.3.58 3.38.45 1.19 1.13 2.07 2 2.61.98.6 2.59.94 4.42.94.79 0 1.61-.07 2.42-.22 1.12-.2 2.2-.59 3.19-1.16A8.3 8.3 0 0 0 16.78 16c1.05-1.17 1.67-2.5 2.12-3.65h.19c1.14 0 1.85-.46 2.24-.85.26-.24.45-.53.59-.87l.08-.24zm-17.96.99h1.76c.08 0 .16-.07.16-.16V9.5c0-.08-.07-.16-.16-.16H3.85c-.09 0-.16.07-.16.16v1.58c.01.09.07.16.16.16m2.43 0h1.76c.08 0 .16-.07.16-.16V9.5c0-.08-.07-.16-.16-.16H6.28c-.09 0-.16.07-.16.16v1.58c.01.09.07.16.16.16m2.47 0h1.75c.1 0 .17-.07.17-.16V9.5c0-.08-.06-.16-.17-.16H8.75c-.08 0-.15.07-.15.16v1.58c0 .09.06.16.15.16m2.44 0h1.77c.08 0 .15-.07.15-.16V9.5c0-.08-.06-.16-.15-.16h-1.77c-.08 0-.15.07-.15.16v1.58c0 .09.07.16.15.16M6.28 9h1.76c.08 0 .16-.09.16-.18V7.25c0-.09-.07-.16-.16-.16H6.28c-.09 0-.16.06-.16.16v1.57c.01.09.07.18.16.18m2.47 0h1.75c.1 0 .17-.09.17-.18V7.25c0-.09-.06-.16-.17-.16H8.75c-.08 0-.15.06-.15.16v1.57c0 .09.06.18.15.18m2.44 0h1.77c.08 0 .15-.09.15-.18V7.25c0-.09-.07-.16-.15-.16h-1.77c-.08 0-.15.06-.15.16v1.57c0 .09.07.18.15.18m0-2.28h1.77c.08 0 .15-.07.15-.16V5c0-.1-.07-.17-.15-.17h-1.77c-.08 0-.15.06-.15.17v1.56c0 .08.07.16.15.16m2.46 4.52h1.76c.09 0 .16-.07.16-.16V9.5c0-.08-.07-.16-.16-.16h-1.76c-.08 0-.15.07-.15.16v1.58c0 .09.07.16.15.16"/></svg> <span>Compose Up, Down and Pull run on the server</span></li>
+      <li><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 1c-1.11 0-2 .89-2 2v4c0 1.11.89 2 2 2H1v2h12V9h-3c1.11 0 2-.89 2-2V3c0-1.11-.89-2-2-2zm0 2h6v4H4zM3 13v7h7v-2H5v-5zm11 0c-1.11 0-2 .89-2 2v4c0 1.11.89 2 2 2h-3v2h12v-2h-3c1.11 0 2-.89 2-2v-4c0-1.11-.89-2-2-2zm0 2h6v4h-6z"/></svg> <span>Forward a server's container port to your <code>localhost</code></span></li>
+      <li><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 21H8V7h11m0-2H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2m-3-4H4a2 2 0 0 0-2 2v14h2V3h12z"/></svg> <span>Copy an image to another engine without a registry</span></li>
+      <li><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 18h-6v-3h-1.7c-1.1 2.4-3.6 4-6.3 4-3.9 0-7-3.1-7-7s3.1-7 7-7c2.7 0 5.2 1.6 6.3 4H24v6h-3zm-4-2h2v-3h3v-2H11.9l-.2-.7C11 8.3 9.1 7 7 7c-2.8 0-5 2.2-5 5s2.2 5 5 5c2.1 0 4-1.3 4.7-3.3l.2-.7H17zM7 15c-1.7 0-3-1.3-3-3s1.3-3 3-3 3 1.3 3 3-1.3 3-3 3m0-4c-.6 0-1 .4-1 1s.4 1 1 1 1-.4 1-1-.4-1-1-1"/></svg> <span>Host key shown and checked before anything is sent</span></li>
+    </ul>
+  </div>
+</section>
+
+<!-- ───────────── Get started ───────────── -->
+<section class="ps-section ps-final ps-reveal">
+  <div class="ps-wrap ps-final__box">
+    <img src="assets/icon.svg" alt="" width="64" height="64">
+    <h2>Get started in a minute</h2>
+    <p>Install Rancher Desktop, choose the dockerd (moby) engine, and run one command.</p>
+    <div class="ps-cta ps-cta--center">
+      <a class="ps-btn ps-btn--primary" href="install-and-update/">Installation guide</a>
+      <a class="ps-btn" href="remote-engines/">Read the docs</a>
+    </div>
+  </div>
+</section>
+
+</div>
+
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+                
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" hidden>
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="." title="Pierside" class="md-nav__button md-logo" aria-label="Pierside" data-md-component="logo">
+      
+  <img src="assets/icon.svg" alt="logo">
+
+    </a>
+    Pierside
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/Hemi131/Pierside" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Hemi131/Pierside
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+      
+      <a href="." class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="install-and-update/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Documentation
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Documentation
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="remote-engines/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Remote engines over SSH
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="what-works-where/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    What works where
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="compose/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Compose projects
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="ports/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Ports and forwarding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="files-and-volumes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Files, volumes and the editor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="ai-access/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    AI access (MCP server)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="alerts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Alerts and notifications
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="building/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Building from source
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="changelog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Changelog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+                
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" hidden>
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+        
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" hidden>
+        
+        
+          
+          <a href="install-and-update/" class="md-footer__link md-footer__link--next" aria-label="Next: Install">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Install
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  <div class="md-copyright__highlight">
+    Pierside · <a href="https://github.com/Hemi131/Pierside/blob/main/LICENSE">Apache-2.0</a> ·
+    <a href="privacy/">Privacy and credits</a>
+  </div>
+  Not affiliated with Docker, Inc., SUSE, Anthropic or Cognition. Docker, Rancher Desktop, Claude, Claude Code,
+  Devin and other names are trademarks of their respective owners.
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://github.com/Hemi131/Pierside" target="_blank" rel="noopener" title="github.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://hub.docker.com/r/hemi131/pierside" target="_blank" rel="noopener" title="hub.docker.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M349.9 236.3h-66.1v-59.4h66.1zm0-204.3h-66.1v60.7h66.1zm78.2 144.8H362v59.4h66.1zm-156.3-72.1h-66.1v60.1h66.1zm78.1 0h-66.1v60.1h66.1zm276.8 100c-14.4-9.7-47.6-13.2-73.1-8.4-3.3-24-16.7-44.9-41.1-63.7l-14-9.3-9.3 14c-18.4 27.8-23.4 73.6-3.7 103.8-8.7 4.7-25.8 11.1-48.4 10.7H2.4c-8.7 50.8 5.8 116.8 44 162.1 37.1 43.9 92.7 66.2 165.4 66.2 157.4 0 273.9-72.5 328.4-204.2 21.4.4 67.6.1 91.3-45.2 1.5-2.5 6.6-13.2 8.5-17.1zm-511.1-27.9h-66v59.4h66.1v-59.4zm78.1 0h-66.1v59.4h66.1zm78.1 0h-66.1v59.4h66.1zm-78.1-72.1h-66.1v60.1h66.1z"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": ".", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.footer", "search.highlight", "content.code.copy", "toc.follow"], "search": "assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+  
+      <script src="assets/javascripts/bundle.a5f9d56c.min.js"></script>
+      
+    
+  <script src="assets/home.js"></script>
+
+  </body>
+</html>

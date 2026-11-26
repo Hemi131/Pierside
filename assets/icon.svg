@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- Pierside: a pier with three stacked boxes. Original design. -->
+  <rect x="4" y="46" width="56" height="6" rx="2" fill="#1f6feb"/>
+  <rect x="10" y="52" width="4" height="8" fill="#1f6feb"/>
+  <rect x="30" y="52" width="4" height="8" fill="#1f6feb"/>
+  <rect x="50" y="52" width="4" height="8" fill="#1f6feb"/>
+  <rect x="10" y="30" width="18" height="14" rx="2" fill="#58a6ff"/>
+  <rect x="32" y="30" width="18" height="14" rx="2" fill="#58a6ff"/>
+  <rect x="21" y="14" width="18" height="14" rx="2" fill="#79c0ff"/>
+</svg>
