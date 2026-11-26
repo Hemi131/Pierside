@@ -4,6 +4,10 @@ Each release of Pierside, newest first. Install a specific one with `rdctl exten
 
 ## Unreleased
 
+## 1.5.1 - 2026-11-26
+
+- Server files and Server disk no longer freeze when Docker on the server stops answering while SSH still works. Folders your SSH user may not read, the usual places and the sizes measured through Docker now give up after 30 seconds (60 seconds for a step in a helper) and say that Docker isn't answering, and one stuck folder no longer holds up all the others. Folders you can read yourself keep working meanwhile, and the Server files and Server disk pages open within a few seconds. A slow Docker no longer greys out the switch for using Docker there; only a server where Docker can't help at all (rootless, user remapping) does. When the usual places on the Server disk page can't be listed, the page says so and offers **Try again** instead of leaving the list out.
+
 ## 1.5.0 - 2026-11-25
 
 - **AI access: scripts.** With the new permission **Run scripts** (off by default), an assistant can send a short Python script that calls Pierside's tools, and only what the script prints comes back to it. A job such as "count the errors in the logs of every running container" then takes one step and far less of the assistant's context. Every call the script makes is checked like a direct one. The script runs in a sandbox on this computer with no network and no access to Docker or your files, and you can see each script before it runs. Changes a script makes can be shown to you as a list first, asked about at the first change of each kind, or one by one. See [AI access](docs/ai-access.md#scripts).

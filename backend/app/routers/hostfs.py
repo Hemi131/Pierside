@@ -35,7 +35,7 @@ async def _do(coro):
 async def state():
     """For the page: which server, as whom, where to start, and the Docker choice for this server."""
     async def build():
-        return {"engine": hostfs.engine_id(), "user": hostfs.ssh_user(), "home": await hostfs.home(), "useDocker": hostfs.consent(), "dockerProblem": await hostfs.docker_problem()}
+        return {"engine": hostfs.engine_id(), "user": hostfs.ssh_user(), "home": await hostfs.home(), "useDocker": hostfs.consent(), "dockerProblem": await hostfs.docker_problem_for_page()}
 
     return await _do(build())
 
@@ -55,7 +55,7 @@ def _same_engine(engine: str) -> None:
 @router.get("/root-terminal")
 async def get_root_terminal():
     async def build():
-        return {"on": hostfs.root_terminal(), "problem": await hostfs.docker_problem()}
+        return {"on": hostfs.root_terminal(), "problem": await hostfs.docker_problem_for_page()}
 
     return await _do(build())
 

@@ -292,7 +292,12 @@ async def _ssh(script: str, marker: str | None = None) -> str:
 
 async def _root_mode() -> bool:
     """Read and act as root: the user allowed Docker for this server, and Docker can help there."""
-    return hostfs.consent() is True and await hostfs.docker_problem() is None
+    if hostfs.consent() is not True:
+        return False
+    try:
+        return await hostfs.docker_problem() is None
+    except FsError:
+        return False  # Docker not answering: read as the SSH user meanwhile
 
 
 async def _helper() -> str:

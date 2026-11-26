@@ -29,7 +29,7 @@ async def overview():
             "user": hostfs.ssh_user(),
             "filesystems": await hostdisk.filesystems(),
             "useDocker": hostfs.consent(),
-            "dockerProblem": await hostfs.docker_problem(),
+            "dockerProblem": await hostfs.docker_problem_for_page(),
         }
 
     return await _do(build())

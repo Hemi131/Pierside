@@ -31,7 +31,7 @@ async def current():
             **data,
             "alerts": eid in watch.server_alerts,
             "useDocker": hostfs.consent(),
-            "dockerProblem": await hostfs.docker_problem(),
+            "dockerProblem": await hostfs.docker_problem_for_page(),
         }
 
     return await _do(build())

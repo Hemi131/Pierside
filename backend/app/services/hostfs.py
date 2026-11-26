@@ -20,8 +20,9 @@ import posixpath
 import secrets
 import shlex
 import time
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable
 from contextvars import ContextVar
+from typing import TypeVar
 
 import aiodocker
 import asyncssh
@@ -34,17 +35,27 @@ from app.services.helper import HELPER_IMAGE, HELPER_LABEL, _ensure_image, _remo
 from app.services.store import write_json
 
 log = logging.getLogger("pierside.hostfs")
+T = TypeVar("T")
 
 STORE = os.path.join(DATA_DIR, "hostfs.json")  # engine id -> true/false: use Docker where SSH is denied
 MOUNT = "/h"  # where the host folder appears inside a helper
 NEVER_MOUNTED = ("/proc", "/sys", "/dev")
 HELPER_IDLE_S = 60
 SSH_TIMEOUT_S = 60
+# The server's Docker can stop answering while SSH still works (a stuck daemon, a dead forwarded
+# channel); every Docker step of the fallback is bounded so a request fails instead of waiting forever.
+DOCKER_TIMEOUT_S = 30  # one API call: inspect, create, start, info, remove
+PULL_TIMEOUT_S = 180  # the helper image, the first time on this server
+OP_TIMEOUT_S = SSH_TIMEOUT_S  # one operation in a helper (a listing, a save), as over SSH
 
 _helpers: dict[tuple[str, str, bool], tuple[str, float]] = {}  # (engine, host folder, writable) -> (container, last used)
-_lock = asyncio.Lock()
+# Helpers being created, so two requests for the same mount share one. No lock is held while Docker is
+# asked anything: one stuck call would otherwise hold up every other request that needs a helper.
+_creating: dict[tuple[str, str, bool], asyncio.Task] = {}
 _reaper: asyncio.Task | None = None
 _capable: dict[str, str | None] = {}  # engine id -> why Docker can't help (None: it can)
+_checking: dict[str, asyncio.Task] = {}  # engine id -> docker_problem's check under way
+PAGE_WAIT_S = 3  # how long a page waits for that check
 
 
 class NeedsConsent(FsError):
@@ -135,19 +146,47 @@ def set_root_terminal(on: bool) -> None:
     write_json(STORE, data, indent=None)
 
 
-async def docker_problem() -> str | None:
-    """Why the Docker fallback can't help on this server, or None."""
+async def _check_capable(eid: str) -> None:
+    info = await bounded(query_json("info"))
+    engine_id()  # still the engine asked about
+    options = " ".join(info.get("SecurityOptions") or [])
+    if "name=rootless" in options:
+        _capable[eid] = "Docker runs rootless on this server, so its containers have no more rights than you"
+    elif "name=userns" in options:
+        _capable[eid] = "Docker remaps users on this server (userns-remap), so its containers have no more rights than you"
+    else:
+        _capable[eid] = None
+
+
+def _checked(eid: str, task: asyncio.Task) -> None:
+    if _checking.get(eid) is task:
+        _checking.pop(eid, None)
+    if not task.cancelled():
+        task.exception()  # retrieved: a check nobody waits for any more fails quietly
+
+
+async def docker_problem(wait: float | None = None) -> str | None:
+    """Why the Docker fallback can't help on this server for good (rootless, userns-remap), or None.
+    Raises FsError (504) when Docker doesn't answer, within `wait` seconds if given: that is never
+    remembered as the answer, and one check per engine goes on in the background meanwhile."""
     eid = engine_id()
-    if eid not in _capable:
-        info = await query_json("info")
-        options = " ".join(info.get("SecurityOptions") or [])
-        if "name=rootless" in options:
-            _capable[eid] = "Docker runs rootless on this server, so its containers have no more rights than you"
-        elif "name=userns" in options:
-            _capable[eid] = "Docker remaps users on this server (userns-remap), so its containers have no more rights than you"
-        else:
-            _capable[eid] = None
+    if eid in _capable:
+        return _capable[eid]
+    task = _checking.get(eid)
+    if task is None or task.done():  # done: it failed, its callback just hasn't run yet
+        task = _checking[eid] = asyncio.ensure_future(_check_capable(eid))
+        task.add_done_callback(lambda t, eid=eid: _checked(eid, t))
+    await bounded(asyncio.shield(task), DOCKER_TIMEOUT_S if wait is None else wait)
     return _capable[eid]
+
+
+async def docker_problem_for_page() -> str | None:
+    """docker_problem() for a page: answers within PAGE_WAIT_S. Not knowing yet (Docker slow or not
+    answering) is no reason to switch the Docker choice off; an action then says what is wrong."""
+    try:
+        return await docker_problem(PAGE_WAIT_S)
+    except FsError:
+        return None
 
 
 # ---- over SSH -----------------------------------------------------------------------------------------
@@ -173,6 +212,22 @@ def _ssh_failed(path: str, code: int, err: bytes, what: str) -> FsError:
 # ---- through Docker -----------------------------------------------------------------------------------
 
 
+async def bounded(aw: Awaitable[T], seconds: float | None = None, what: str = "") -> T:
+    """`aw`, or a 504 FsError when the server's Docker doesn't answer within `seconds` (DOCKER_TIMEOUT_S)."""
+    seconds = DOCKER_TIMEOUT_S if seconds is None else seconds
+    try:
+        return await asyncio.wait_for(aw, seconds)
+    except asyncio.TimeoutError:
+        raise FsError(f"Docker on the server didn't answer within {seconds:g} seconds{what}", 504)
+
+
+async def _remove_bounded(cid: str) -> None:
+    try:
+        await bounded(_remove(cid))
+    except FsError as e:
+        log.warning("couldn't remove helper %s: %s", cid[:12], e)  # it ends with its `sleep` anyway
+
+
 def _mountable(folder: str) -> None:
     if folder == "/":
         raise FsError("Pierside doesn't mount the server's root folder; the files directly in / can only be reached with your own rights", 403)
@@ -182,7 +237,7 @@ def _mountable(folder: str) -> None:
 
 async def _create(folder: str, writable: bool) -> str:
     engine_id()
-    await _ensure_image()
+    await bounded(_ensure_image(), PULL_TIMEOUT_S, " (checking or pulling the helper image)")
     config = {
         "Image": HELPER_IMAGE,
         "Cmd": ["sleep", "3600"],
@@ -194,12 +249,18 @@ async def _create(folder: str, writable: bool) -> str:
     }
     engine_id()  # no await between this and using the client below
     try:
-        c = await get_docker().containers.create(config, name=f"pierside-helper-{secrets.token_hex(4)}")
+        # A create that answers after the time limit leaves a helper nobody uses: labelled, it is swept
+        # on the next engine switch, and ends with its `sleep` (AutoRemove) otherwise.
+        c = await bounded(get_docker().containers.create(config, name=f"pierside-helper-{secrets.token_hex(4)}"), what=" (creating a helper)")
     except aiodocker.DockerError as e:
         if "does not exist" in str(e.message):
             raise FsError(f"{folder} doesn't exist on the server", 404)
         raise
-    await c.start()
+    try:
+        await bounded(c.start(), what=" (starting a helper)")
+    except BaseException:
+        asyncio.ensure_future(_remove_bounded(c.id))
+        raise
     return c.id
 
 
@@ -225,36 +286,52 @@ async def _mount_point(folder: str) -> tuple[str, str]:
 
 
 async def _running_helper(eid: str, folder: str, writable: bool) -> tuple[str, str] | None:
-    """An existing helper that has `folder` or a folder above it mounted (call with _lock held)."""
-    for (e, mounted, w), (cid, _last) in sorted(_helpers.items(), key=lambda kv: -len(kv[0][1])):
-        if e == eid and w == writable and (folder == mounted or folder.startswith(mounted + "/")):
-            try:
-                if ((await query_json(f"containers/{cid}/json")).get("State") or {}).get("Running"):
-                    _helpers[(e, mounted, w)] = (cid, time.monotonic())
-                    return cid, mounted
-            except aiodocker.DockerError:
-                pass
-            _helpers.pop((e, mounted, w), None)
+    """An existing helper that has `folder` or a folder above it mounted."""
+    candidates = [
+        (key, cid)
+        for key, (cid, _last) in sorted(_helpers.items(), key=lambda kv: -len(kv[0][1]))
+        if key[0] == eid and key[2] == writable and (folder == key[1] or folder.startswith(key[1] + "/"))
+    ]
+    for key, cid in candidates:
+        try:
+            running = ((await bounded(query_json(f"containers/{cid}/json"), what=" (checking a helper)")).get("State") or {}).get("Running")
+        except aiodocker.DockerError:
+            running = False
+        if running:
+            if key in _helpers and _helpers[key][0] == cid:  # not reaped meanwhile
+                _helpers[key] = (cid, time.monotonic())
+                return cid, key[1]
+            continue
+        if key in _helpers and _helpers[key][0] == cid:  # only the one checked, not a newer one
+            _helpers.pop(key, None)
     return None
+
+
+async def _new_helper(key: tuple[str, str, bool], real: str) -> str:
+    cid = await _create(real, key[2])
+    _helpers[key] = (cid, time.monotonic())
+    return cid
 
 
 async def _helper(folder: str, writable: bool) -> tuple[str, str]:
     """A running helper that has `folder` (or a folder above it) mounted: (container id, mounted folder)."""
     _mountable(folder)
     eid = engine_id()
-    async with _lock:
-        _start_reaper()
-        found = await _running_helper(eid, folder, writable)
+    _start_reaper()
+    found = await _running_helper(eid, folder, writable)
     if found is None:
-        # A new mount, of the real path (no symbolic link left in it to swap or follow). Resolving it
-        # takes SSH round trips: not while holding the lock, which every other request waits for.
+        # A new mount, of the real path (no symbolic link left in it to swap or follow).
         mounted, real = await _mount_point(folder)
-        async with _lock:
-            found = await _running_helper(eid, folder, writable)  # made by another request meanwhile?
-            if found is None:
-                cid = await _create(real, writable)
-                _helpers[(eid, mounted, writable)] = (cid, time.monotonic())
-                found = (cid, mounted)
+        found = await _running_helper(eid, folder, writable)  # made by another request meanwhile?
+        if found is None:
+            key = (eid, mounted, writable)
+            task = _creating.get(key)
+            if task is None:
+                # Shared by every request for this mount until it is done; shielded, so a request that
+                # gives up doesn't cancel the creation another one is waiting for.
+                task = _creating[key] = asyncio.ensure_future(_new_helper(key, real))
+                task.add_done_callback(lambda t, key=key: _creating.pop(key, None) if _creating.get(key) is t else None)
+            found = (await asyncio.shield(task), mounted)
     cid, mounted = found
     if mounted != folder:
         # The rest of the path is followed inside the helper: a link there that leads out of the mount
@@ -262,7 +339,7 @@ async def _helper(folder: str, writable: bool) -> tuple[str, str]:
         inner = MOUNT + _inside(mounted, folder) if _inside(mounted, folder) != "/" else MOUNT
         # Decided by the output whatever the exit code says (Docker may record it late): any answer
         # outside the mount refuses; no answer means nothing to follow (the next step reports it missing).
-        _code, out, _err = await fsbrowse._exec(cid, ["readlink", "-f", "--", inner])
+        _code, out, _err = await bounded(fsbrowse._exec(cid, ["readlink", "-f", "--", inner]), what=" (in a helper)")
         real = out.decode("utf-8", "replace").rstrip("\n")
         if real and not (real == MOUNT or real.startswith(MOUNT + "/")):
             raise FsError(f"{folder} is a link that leads outside the folder Pierside could mount, so it can't be followed here", 403)
@@ -292,7 +369,7 @@ async def _reap() -> None:
             if now - last > HELPER_IDLE_S or key[0] != engines.active_id:
                 _helpers.pop(key, None)
                 if key[0] == engines.active_id:
-                    await _remove(cid)
+                    await _remove_bounded(cid)
 
 
 async def _fallback(path: str) -> None:
@@ -302,7 +379,10 @@ async def _fallback(path: str) -> None:
         raise NeedsConsent(path)
     if not allowed:
         raise FsError(f"Your SSH user ({ssh_user()}) has no permission for {path}. Using Docker for such files is switched off for this server.", 403)
-    problem = await docker_problem()
+    try:
+        problem = await docker_problem()
+    except FsError as e:
+        raise FsError(f"Your SSH user ({ssh_user()}) has no permission for {path}, and {e}.", e.status)
     if problem:
         raise FsError(f"Your SSH user ({ssh_user()}) has no permission for {path}, and Docker can't help: {problem}.", 403)
 
@@ -324,7 +404,7 @@ async def list_dir(path: str) -> dict:
             raise
     await _fallback(path)
     cid, mounted = await _helper(path, False)
-    r = await fsbrowse.list_dir(cid, MOUNT, _inside(mounted, path))
+    r = await bounded(fsbrowse.list_dir(cid, MOUNT, _inside(mounted, path)), OP_TIMEOUT_S, " (in a helper)")
     for entry in r["entries"]:
         entry["path"] = posixpath.join(mounted, entry["path"].lstrip("/")) if entry["path"] != "/" else mounted
     return {**r, "path": path, "via": "docker"}
@@ -337,8 +417,13 @@ async def search_names(path: str, query: str) -> dict:
     result = None
     try:
         result = {**await fsbrowse.search_names(None, "/", path, query, run=ssh_run), "via": "ssh"}
-        if not result["skipped"] or consent() is not True or path == "/" or await docker_problem():
+        if not result["skipped"] or consent() is not True or path == "/":
             return result
+        try:
+            if await docker_problem():
+                return result
+        except FsError:
+            return result  # Docker not answering: keep what the user could see
     except FsError as e:
         if e.status != 403:
             raise
@@ -349,7 +434,7 @@ async def search_names(path: str, query: str) -> dict:
         if result is None:
             raise
         return result  # a folder Pierside doesn't mount: keep what the user could see
-    r = await fsbrowse.search_names(cid, MOUNT, _inside(mounted, path), query)
+    r = await bounded(fsbrowse.search_names(cid, MOUNT, _inside(mounted, path), query), OP_TIMEOUT_S, " (in a helper)")
     for entry in r["entries"]:
         entry["path"] = posixpath.join(mounted, entry["path"].lstrip("/")) if entry["path"] != "/" else mounted
     return {**r, "path": path, "via": "docker"}
@@ -364,7 +449,7 @@ async def read_preview(path: str) -> dict:
             raise
     await _fallback(path)
     cid, mounted = await _helper(posixpath.dirname(path), False)
-    return {**await fsbrowse.read_preview(cid, MOUNT, _inside(mounted, path)), "path": path, "via": "docker"}
+    return {**await bounded(fsbrowse.read_preview(cid, MOUNT, _inside(mounted, path)), OP_TIMEOUT_S, " (in a helper)"), "path": path, "via": "docker"}
 
 
 # Saving over SSH, as the SSH user: the "$2" bytes of the input go to a private temporary file first
@@ -396,8 +481,8 @@ async def save_text(path: str, content: str) -> dict:
     await _fallback(path)
     cid, mounted = await _helper(posixpath.dirname(path), True)
     inner = _inside(mounted, path)
-    owner = await fswrite.owner_of(cid, posixpath.dirname(inner) or "/", MOUNT)
-    return {**await fswrite.save_text(cid, inner, content, root=MOUNT, owner=owner), "path": path, "via": "docker"}
+    owner = await bounded(fswrite.owner_of(cid, posixpath.dirname(inner) or "/", MOUNT), OP_TIMEOUT_S, " (in a helper)")
+    return {**await bounded(fswrite.save_text(cid, inner, content, root=MOUNT, owner=owner), OP_TIMEOUT_S, " (in a helper)"), "path": path, "via": "docker"}
 
 
 async def make_dir(path: str) -> dict:
@@ -411,8 +496,8 @@ async def make_dir(path: str) -> dict:
     await _fallback(path)
     cid, mounted = await _helper(posixpath.dirname(path), True)
     inner = _inside(mounted, path)
-    owner = await fswrite.owner_of(cid, posixpath.dirname(inner) or "/", MOUNT)
-    await fswrite.make_dir(cid, inner, root=MOUNT, owner=owner)
+    owner = await bounded(fswrite.owner_of(cid, posixpath.dirname(inner) or "/", MOUNT), OP_TIMEOUT_S, " (in a helper)")
+    await bounded(fswrite.make_dir(cid, inner, root=MOUNT, owner=owner), OP_TIMEOUT_S, " (in a helper)")
     return {"path": path, "via": "docker"}
 
 
@@ -429,7 +514,7 @@ async def delete(path: str) -> dict:
     # Whatever SSH could delete is gone already; Docker deletes the rest.
     await _fallback(path)
     cid, mounted = await _helper(posixpath.dirname(path), True)
-    await fswrite.delete(cid, _inside(mounted, path), root=MOUNT)
+    await bounded(fswrite.delete(cid, _inside(mounted, path), root=MOUNT), OP_TIMEOUT_S, " (in a helper)")
     return {"path": path, "via": "docker"}
 
 
@@ -446,7 +531,7 @@ async def chmod(path: str, mode: str, recursive: bool) -> dict:
         raise failure
     await _fallback(path)
     cid, mounted = await _helper(posixpath.dirname(path), True)
-    await fswrite.chmod(cid, _inside(mounted, path), mode, recursive, root=MOUNT)
+    await bounded(fswrite.chmod(cid, _inside(mounted, path), mode, recursive, root=MOUNT), OP_TIMEOUT_S, " (in a helper)")
     return {"path": path, "mode": mode, "via": "docker"}
 
 
@@ -496,7 +581,7 @@ async def upload(directory: str, name: str, size: int, body: AsyncIterator[bytes
     if via == "docker":
         inner = _inside(mounted, directory)
         async with lease(cid):
-            owner = await fswrite.owner_of(cid, inner, MOUNT)
+            owner = await bounded(fswrite.owner_of(cid, inner, MOUNT), OP_TIMEOUT_S, " (in a helper)")
             await fswrite.upload(cid, inner, name, size, body, root=MOUNT, owner=owner)
         return {"path": target, "via": "docker"}
     conn = await tunnel()._connection()
@@ -560,7 +645,7 @@ async def readable(path: str) -> int:
             raise
     await _fallback(path)
     cid, mounted = await _helper(posixpath.dirname(path), False)
-    return await fsbrowse.file_size(cid, MOUNT, _inside(mounted, path))
+    return await bounded(fsbrowse.file_size(cid, MOUNT, _inside(mounted, path)), OP_TIMEOUT_S, " (in a helper)")
 
 
 async def release_all() -> None:
@@ -568,4 +653,4 @@ async def release_all() -> None:
     for key, (cid, _last) in list(_helpers.items()):
         _helpers.pop(key, None)
         if key[0] == engines.active_id:
-            await _remove(cid)
+            await _remove_bounded(cid)

@@ -107,6 +107,18 @@ export function ServerDiskView({ path }: { path?: string }) {
   const run = useRef(0);
   const [busy, setBusy] = useState(false);
   const [places, setPlaces] = useState<Place[]>([]);
+  const [placesError, setPlacesError] = useState<string | null>(null);
+
+  const loadPlaces = useCallback(() => {
+    setPlacesError(null);
+    api
+      .get<Place[]>("/hostdisk/places")
+      .then(setPlaces)
+      .catch((e) => {
+        setPlaces([]);
+        setPlacesError((e as Error).message);
+      });
+  }, []);
 
   const loadOverview = useCallback(() => {
     setError(null);
@@ -114,11 +126,8 @@ export function ServerDiskView({ path }: { path?: string }) {
       .get<Overview>("/hostdisk")
       .then(setOverview)
       .catch((e) => setError((e as Error).message));
-    api
-      .get<Place[]>("/hostdisk/places")
-      .then(setPlaces)
-      .catch(() => setPlaces([]));
-  }, []);
+    loadPlaces();
+  }, [loadPlaces]);
 
   useEffect(() => {
     setOverview(null);
@@ -352,6 +361,19 @@ export function ServerDiskView({ path }: { path?: string }) {
             </Link>{" "}
             page.
           </Typography>
+          {placesError && (
+            <Alert
+              severity="warning"
+              sx={{ mb: 2 }}
+              action={
+                <Button color="inherit" size="small" onClick={loadPlaces}>
+                  Try again
+                </Button>
+              }
+            >
+              Couldn't list the usual places: {placesError}
+            </Alert>
+          )}
           {placeRows.length > 0 && (
             <Paper variant="outlined" sx={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 160, overflow: "hidden" }}>
               <Stack direction="row" alignItems="center" spacing={1} sx={{ px: 2, py: 1, borderBottom: 1, borderColor: "divider" }}>

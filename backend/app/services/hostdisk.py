@@ -21,7 +21,7 @@ from app.services import fsbrowse, hostfs
 from app.services.docker_client import query_json
 from app.services.engines import engines
 from app.services.fsbrowse import FsError
-from app.services.helper import _remove, busy, lease, only_held_by
+from app.services.helper import busy, lease, only_held_by
 
 log = logging.getLogger("pierside.hostdisk")
 
@@ -97,7 +97,7 @@ _USUAL_PLACES = (
 async def usual_places() -> list[dict]:
     """The usual places that exist on this server. Sizes are asked for separately (size())."""
     hostfs.engine_id()
-    info = await query_json("info")
+    info = await hostfs.bounded(query_json("info"))
     docker_root = (info.get("DockerRootDir") or "/var/lib/docker").rstrip("/")
     places = [(path.replace("{docker}", docker_root), label, hint) for path, label, hint in _USUAL_PLACES]
     # One round trip: which of them are there. Folders inside Docker's data can't be seen by an
@@ -166,20 +166,28 @@ async def size(path: str) -> dict:
             allowed = hostfs.consent()
             if allowed is None:
                 result["needsConsent"] = True
-            elif allowed and not await hostfs.docker_problem():
+            elif allowed:
                 try:
-                    cid, mounted = await hostfs._helper(path, False)
-                except FsError:
-                    cid = None  # a folder Pierside doesn't mount (/, /proc, …): keep the user's own figure
-                if cid:
-                    inner = fsbrowse.confine(hostfs.MOUNT, hostfs._inside(mounted, path))
-                    async with lease(cid, "du"):  # the reaper would remove the helper under a long `du`
-                        _code, out, _err = await fsbrowse.run_in(cid, ["sh", "-c", _DU, "sh", inner, str(SIZE_SECONDS)])
-                    total2, unreadable2, timed_out2 = _parse(out.decode("utf-8", "replace"))
-                    if total2 is not None:
-                        result.update(bytes=total2, partial=unreadable2 or timed_out2, timedOut=timed_out2, via="docker")
+                    await _measure_in_helper(path, result)
+                except FsError as e:
+                    # A folder Pierside doesn't mount (/, /proc, …), or Docker on the server not answering:
+                    # keep the user's own figure.
+                    log.info("measuring %s in a helper: %s", path, e)
         result["seconds"] = round(time.monotonic() - started, 1)
         return result
+
+
+async def _measure_in_helper(path: str, result: dict) -> None:
+    """Measure `path` again as root in a read-only helper, into `result` (unless Docker can't help here)."""
+    if await hostfs.docker_problem():
+        return
+    cid, mounted = await hostfs._helper(path, False)
+    inner = fsbrowse.confine(hostfs.MOUNT, hostfs._inside(mounted, path))
+    async with lease(cid, "du"):  # the reaper would remove the helper under a long `du`
+        _code, out, _err = await hostfs.bounded(fsbrowse.run_in(cid, ["sh", "-c", _DU, "sh", inner, str(SIZE_SECONDS)]), SIZE_SECONDS + 15, " (measuring in a helper)")
+    total, unreadable, timed_out = _parse(out.decode("utf-8", "replace"))
+    if total is not None:
+        result.update(bytes=total, partial=unreadable or timed_out, timedOut=timed_out, via="docker")
 
 
 async def cancel() -> None:
@@ -193,4 +201,4 @@ async def cancel() -> None:
     for key, (cid, _last) in list(hostfs._helpers.items()):
         if key[0] == engines.active_id and not key[2] and (not busy(cid) or only_held_by(cid, "du")):
             hostfs._helpers.pop(key, None)
-            await _remove(cid)
+            await hostfs._remove_bounded(cid)
